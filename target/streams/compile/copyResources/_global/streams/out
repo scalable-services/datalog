@@ -1,0 +1,4 @@
+[0m[[0m[0mdebug[0m] [0m[0mCopy resource mappings: [0m
+[0m[[0m[0mdebug[0m] [0m[0m	(/Users/lucasrpb/scalable.services/database/src/main/protobuf/client.proto,/Users/lucasrpb/scalable.services/database/target/scala-2.13/classes/client.proto)[0m
+[0m[[0m[0mdebug[0m] [0m[0m	(/Users/lucasrpb/scalable.services/database/src/main/protobuf/protocol.proto,/Users/lucasrpb/scalable.services/database/target/scala-2.13/classes/protocol.proto)[0m
+[0m[[0m[0mdebug[0m] [0m[0m	(/Users/lucasrpb/scalable.services/database/src/main/resources/logback.xml,/Users/lucasrpb/scalable.services/database/target/scala-2.13/classes/logback.xml)[0m
