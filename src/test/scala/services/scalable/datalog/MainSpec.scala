@@ -72,7 +72,7 @@ class MainSpec extends AnyFlatSpec with Repeatable {
       }
     }
 
-    val followers = Await.result(TestHelper.all(db.aevtIndex.find(word, true, false, Some(prefix), Some(prefixOrd), aevtOrdering)), Duration.Inf)
+    val followers = Await.result(TestHelper.all(db.aevtIndex.find(word, false, false, aevtOrdering)), Duration.Inf)
 
     logger.debug(s"\n\nfollowers: ${followers.map{case (d, _) => printDatom(d, d.getA)}}${Console.RESET}\n\n")
 }
