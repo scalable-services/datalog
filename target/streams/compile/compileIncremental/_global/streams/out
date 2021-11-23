@@ -1,6 +1,6 @@
 [0m[[0m[0mdebug[0m] [0m[0m[zinc] IncrementalCompile -----------[0m
 [0m[[0m[0mdebug[0m] [0m[0mIncrementalCompile.incrementalCompile[0m
-[0m[[0m[0mdebug[0m] [0m[0mprevious = Stamps for: 8 products, 3 sources, 4 libraries[0m
-[0m[[0m[0mdebug[0m] [0m[0mcurrent source = Set(${BASE}/src/main/scala/services/scalable/database/DatomDatabase.scala, ${BASE}/target/scala-2.13/akka-grpc/main/services/scalable/database/grpc/ClientProto.scala, ${BASE}/target/scala-2.13/akka-grpc/main/services/scalable/database/grpc/ProtocolProto.scala)[0m
+[0m[[0m[0mdebug[0m] [0m[0mprevious = Stamps for: 15 products, 3 sources, 5 libraries[0m
+[0m[[0m[0mdebug[0m] [0m[0mcurrent source = Set(${BASE}/src/main/scala/services/scalable/datalog/DatomDatabase.scala, ${BASE}/target/scala-2.13/akka-grpc/main/services/scalable/datalog/grpc/ProtocolProto.scala, ${BASE}/target/scala-2.13/akka-grpc/main/services/scalable/datalog/grpc/ClientProto.scala)[0m
 [0m[[0m[0mdebug[0m] [0m[0m> initialChanges = InitialChanges(Changes(added = Set(), removed = Set(), changed = Set(), unmodified = ...),Set(),Set(),API Changes: Set())[0m
 [0m[[0m[0mdebug[0m] [0m[0mNo changes[0m

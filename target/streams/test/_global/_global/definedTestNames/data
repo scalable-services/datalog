@@ -1,1 +1,1 @@
-["services.scalable.database.MainSpec","services.scalable.database.DatomSpec"]
+["services.scalable.datalog.CreateFileDatabase","services.scalable.datalog.MainSpec","services.scalable.datalog.DatomSpec"]

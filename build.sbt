@@ -1,4 +1,4 @@
-name := "database"
+name := "datalog"
 
 version := "0.1"
 

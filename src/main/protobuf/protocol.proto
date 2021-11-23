@@ -3,13 +3,13 @@ syntax = "proto3";
 
 //#options
 option java_multiple_files = true;
-option java_package = "services.scalable.database.grpc";
+option java_package = "services.scalable.datalog.grpc";
 option java_outer_classname = "ClientServiceProto";
 
 import "scalapb/scalapb.proto";
 import "google/protobuf/wrappers.proto";
 
-package services.scalable.database.grpc;
+package services.scalable.datalog.grpc;
 
 option (scalapb.options) = {
   single_file: true
@@ -23,4 +23,8 @@ message Datom {
   optional string e = 3;
   optional int64 t = 4;
   optional bool op = 5;
+}
+
+message FileDB {
+  repeated Datom datoms = 1;
 }
