@@ -1,6 +1,0 @@
-#Successful Tests
-#Tue Nov 23 19:30:23 BRT 2021
-services.scalable.datalog.CreateFileDatabase=1637700141331
-services.scalable.datalog.MainSpec=1637706623949
-services.scalable.datalog.DatomSpec=1637689818649
-services.scalable.database.DatomSpec=1637460867197

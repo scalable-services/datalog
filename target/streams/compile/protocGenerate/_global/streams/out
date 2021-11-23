@@ -1,5 +1,0 @@
-[0m[[0m[0mdebug[0m] [0m[0mInvalidating cache (input changed)[0m
-[0m[[0m[0minfo[0m] [0m[0mCompiling 2 protobuf files to D:\Users\lucas\scalable.services\datalog\target\scala-2.13\akka-grpc\main[0m
-[0m[[0m[0mdebug[0m] [0m[0mprotoc options:[0m
-[0m[[0m[0mdebug[0m] [0m[0mCompiling schema D:\Users\lucas\scalable.services\datalog\src\main\protobuf\client.proto[0m
-[0m[[0m[0mdebug[0m] [0m[0mCompiling schema D:\Users\lucas\scalable.services\datalog\src\main\protobuf\protocol.proto[0m
