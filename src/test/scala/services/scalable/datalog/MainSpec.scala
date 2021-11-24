@@ -9,10 +9,10 @@ import java.util.concurrent.ThreadLocalRandom
 import scala.language.postfixOps
 import com.google.protobuf.any.Any
 import services.scalable.datalog.grpc.{Datom, FileDB}
-import services.scalable.index.Bytes
+import services.scalable.index.{Bytes, RichAsyncIterator}
 import services.scalable.index.DefaultComparators.ord
 
-import scala.concurrent.Await
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -72,7 +72,24 @@ class MainSpec extends AnyFlatSpec with Repeatable {
       }
     }
 
-    val followers = Await.result(TestHelper.all(db.aevtIndex.find(word, false, false, aevtOrdering)), Duration.Inf)
+    var it: RichAsyncIterator[Datom, Bytes] = db.aevtIndex.find(word, false, aevtOrdering)
+
+    /*def find30(e: String): Future[Seq[String]] = {
+      null
+    }
+
+    def findFollowersAgeGteq30(): Future[Seq[String]] = {
+      it.hasNext().flatMap {
+        case true => it.next().flatMap { list =>
+          Future.sequence(list.map{ case (f, _) =>
+            find30(f.getE)
+          })
+        }
+        case false => Future.successful(Seq.empty[String])
+      }
+    }*/
+
+    val followers = Await.result(TestHelper.all(db.aevtIndex.find(word, false, aevtOrdering)), Duration.Inf)
 
     logger.debug(s"\n\nfollowers: ${followers.map{case (d, _) => printDatom(d, d.getA)}}${Console.RESET}\n\n")
 }

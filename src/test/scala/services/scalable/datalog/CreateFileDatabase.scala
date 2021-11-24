@@ -26,6 +26,7 @@ class CreateFileDatabase extends AnyFlatSpec {
         case "users/:tweetedBy" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]"
         case "users/:username" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]"
         case "users/:likes" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]"
+        case "users/:email" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]"
         case "users/:follows" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]"
         case "users/:age" => s"[${d.a},${java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()},${d.e},${d.t}]"
         case _ => ""
@@ -49,6 +50,7 @@ class CreateFileDatabase extends AnyFlatSpec {
       val username = s"user-$i"
       val age = rand.nextInt(18, 100)
       val now = System.currentTimeMillis()
+      val email = s"$username@gmail.com"
 
       users :+= username -> id
 
@@ -67,7 +69,16 @@ class CreateFileDatabase extends AnyFlatSpec {
           e = Some(id),
           t = Some(now),
           op = Some(true)
+        ),
+
+        Datom(
+          a = Some("users/:email"),
+          v = Some(ByteString.copyFrom(email.getBytes())),
+          e = Some(id),
+          t = Some(now),
+          op = Some(true)
         )
+
       )
     }
 
