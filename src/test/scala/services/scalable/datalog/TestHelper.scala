@@ -15,4 +15,13 @@ object TestHelper {
     }
   }
 
+  def one[K, V](it: AsyncIterator[Seq[Tuple[K, V]]])(implicit ec: ExecutionContext): Future[Option[Tuple[K, V]]] = {
+    it.hasNext().flatMap {
+      case true => it.next().map { list =>
+        list.headOption
+      }
+      case false => Future.successful(None)
+    }
+  }
+
 }

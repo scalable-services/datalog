@@ -33,6 +33,7 @@ class MainSpec extends AnyFlatSpec with Repeatable {
         case "users/:tweet" => s"${Console.GREEN_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
         case "users/:tweetedBy" => s"${Console.RED_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
         case "users/:username" => s"${Console.MAGENTA_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
+        case "users/:email" => s"[${Console.CYAN_B}${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
         case "users/:likes" => s"${Console.YELLOW_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
         case "users/:follows" => s"${Console.BLUE_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
         case "users/:age" => s"${Console.CYAN_B}[${d.a},${java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()},${d.e},${d.t}]${Console.RESET}"
@@ -59,9 +60,6 @@ class MainSpec extends AnyFlatSpec with Repeatable {
       }
     }
 
-    val prefix = Datom(a = Some("users/:follows"))
-    val word = Datom(a = Some("users/:follows"), e = Some("user-2"))
-
     val aevtOrdering = new Ordering[Datom] {
       override def compare(x: Datom, y: Datom): Int = {
         val r = ord.compare(x.getA.getBytes(), y.getA.getBytes())
@@ -72,26 +70,71 @@ class MainSpec extends AnyFlatSpec with Repeatable {
       }
     }
 
-    var it: RichAsyncIterator[Datom, Bytes] = db.aevtIndex.find(word, false, aevtOrdering)
+    val avetOrdering = new Ordering[Datom] {
+      override def compare(x: Datom, y: Datom): Int = {
+        val r = ord.compare(x.getA.getBytes(), y.getA.getBytes())
 
-    /*def find30(e: String): Future[Seq[String]] = {
-      null
+        if(r != 0) return r
+
+        ord.compare(x.getV.toByteArray, y.getV.toByteArray)
+      }
     }
 
-    def findFollowersAgeGteq30(): Future[Seq[String]] = {
+    val eavtOrdering = new Ordering[Datom] {
+      override def compare(x: Datom, y: Datom): Int = {
+        var r = ord.compare(x.getE.getBytes(), y.getE.getBytes())
+
+        if(r != 0) return r
+
+        ord.compare(x.getA.getBytes(), y.getA.getBytes())
+      }
+    }
+
+    var it: RichAsyncIterator[Datom, Bytes] = null
+
+    def find30(followeeId: String): Future[Option[(String, Int)]] = {
+      TestHelper.one(db.eavtIndex.find(Datom(e = Some(followeeId), a = Some("users/:age")), false, eavtOrdering))
+        .map {
+          case None => None
+          case Some((d, _)) =>
+
+            val age = java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()
+
+            logger.info(s"age: ${age} followee: ${followeeId}")
+
+            if(age >= 30){
+              Some(followeeId -> age)
+            } else {
+              None
+            }
+        }
+    }
+
+    def findFollowersAgeGteq30(it: RichAsyncIterator[Datom, Bytes]): Future[Seq[(String, Int)]] = {
       it.hasNext().flatMap {
         case true => it.next().flatMap { list =>
           Future.sequence(list.map{ case (f, _) =>
-            find30(f.getE)
-          })
+            find30(new String(f.getV.toByteArray))
+          }).map(_.filter(_.isDefined).map(_.get))
         }
-        case false => Future.successful(Seq.empty[String])
+        case false => Future.successful(Seq.empty[(String, Int)])
       }
-    }*/
+    }
 
-    val followers = Await.result(TestHelper.all(db.aevtIndex.find(word, false, aevtOrdering)), Duration.Inf)
+    val userId = Await.result(TestHelper.one(db.avetIndex.find(Datom(a = Some("users/:username"),
+      v = Some(ByteString.copyFrom("user-87".getBytes()))), false, avetOrdering)), Duration.Inf).map(_._1.getE).get
 
-    logger.debug(s"\n\nfollowers: ${followers.map{case (d, _) => printDatom(d, d.getA)}}${Console.RESET}\n\n")
+    /*val followers = Await.result(TestHelper.all(db.aevtIndex.find(Datom(a = Some("users/:follows"), e = Some(userId)),
+      false, aevtOrdering)), Duration.Inf)*/
+
+    val f = findFollowersAgeGteq30(db.aevtIndex.find(Datom(a = Some("users/:follows"), e = Some(userId)),
+      false, aevtOrdering))
+
+    val result = Await.result(f, Duration.Inf)
+
+    logger.debug(s"\n\nfollowers: ${result}${Console.RESET}\n\n")
+
+    //logger.debug(s"\n\nfollowers: ${followers.map{case (d, _) => printDatom(d, d.getA)}}${Console.RESET}\n\n")
 }
 
 }

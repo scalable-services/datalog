@@ -86,30 +86,30 @@ class CreateFileDatabase extends AnyFlatSpec {
 
     // Insert some followers
     for(i<-0 until 1000){
-      val (follower, _) = users(rand.nextInt(0, users.length))
-      val (following, _) = users(rand.nextInt(0, users.length))
+      val (_, follower) = users(rand.nextInt(0, users.length))
+      val (_, followee) = users(rand.nextInt(0, users.length))
       val now = System.currentTimeMillis()
 
-      if(follower.compareTo(following) != 0){
+      if(follower.compareTo(followee) != 0){
         if(!followers.isDefinedAt(follower)){
 
-          followers.put(follower, Seq(following))
+          followers.put(follower, Seq(followee))
 
           datoms = datoms :+ Datom(
             a = Some("users/:follows"),
-            v = Some(ByteString.copyFrom(follower.getBytes())),
-            e = Some(following),
+            v = Some(ByteString.copyFrom(followee.getBytes())),
+            e = Some(follower),
             t = Some(now),
             op = Some(true)
           )
 
-        } else if(!followers(follower).exists{x => x.compareTo(following) == 0}){
-          followers.update(follower, followers(follower) :+ following)
+        } else if(!followers(follower).exists{x => x.compareTo(followee) == 0}){
+          followers.update(follower, followers(follower) :+ followee)
 
           datoms = datoms :+ Datom(
             a = Some("users/:follows"),
-            v = Some(ByteString.copyFrom(follower.getBytes())),
-            e = Some(following),
+            v = Some(ByteString.copyFrom(followee.getBytes())),
+            e = Some(follower),
             t = Some(now),
             op = Some(true)
           )
