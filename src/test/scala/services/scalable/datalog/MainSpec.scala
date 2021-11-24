@@ -92,10 +92,11 @@ class MainSpec extends AnyFlatSpec with Repeatable {
 
     var it: RichAsyncIterator[Datom, Bytes] = null
 
-    def find30(followeeId: String): Future[Option[(String, Int)]] = {
+    // Checks if the follower's age is >= 30 and returns its username
+    def isGteq30(followeeId: String): Future[Option[(String, Int)]] = {
       TestHelper.one(db.eavtIndex.find(Datom(e = Some(followeeId), a = Some("users/:age")), false, eavtOrdering))
-        .map {
-          case None => None
+        .flatMap {
+          case None => Future.successful(None)
           case Some((d, _)) =>
 
             val age = java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()
@@ -103,9 +104,10 @@ class MainSpec extends AnyFlatSpec with Repeatable {
             logger.info(s"age: ${age} followee: ${followeeId}")
 
             if(age >= 30){
-              Some(followeeId -> age)
+              TestHelper.one(db.eavtIndex.find(Datom(e = Some(followeeId), a = Some("users/:username")), false, eavtOrdering))
+                .map(_.map(_._1.getV.toStringUtf8 -> age))
             } else {
-              None
+              Future.successful(None)
             }
         }
     }
@@ -114,7 +116,7 @@ class MainSpec extends AnyFlatSpec with Repeatable {
       it.hasNext().flatMap {
         case true => it.next().flatMap { list =>
           Future.sequence(list.map{ case (f, _) =>
-            find30(new String(f.getV.toByteArray))
+            isGteq30(new String(f.getV.toByteArray))
           }).map(_.filter(_.isDefined).map(_.get))
         }
         case false => Future.successful(Seq.empty[(String, Int)])
