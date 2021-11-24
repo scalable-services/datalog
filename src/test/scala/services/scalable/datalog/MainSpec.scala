@@ -90,8 +90,6 @@ class MainSpec extends AnyFlatSpec with Repeatable {
       }
     }
 
-    var it: RichAsyncIterator[Datom, Bytes] = null
-
     // Checks if the follower's age is >= 30 and returns its username
     def isGteq30(followeeId: String): Future[Option[(String, Int)]] = {
       TestHelper.one(db.eavtIndex.find(Datom(e = Some(followeeId), a = Some("users/:age")), false, eavtOrdering))
@@ -100,8 +98,6 @@ class MainSpec extends AnyFlatSpec with Repeatable {
           case Some((d, _)) =>
 
             val age = java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()
-
-            logger.info(s"age: ${age} followee: ${followeeId}")
 
             if(age >= 30){
               TestHelper.one(db.eavtIndex.find(Datom(e = Some(followeeId), a = Some("users/:username")), false, eavtOrdering))
@@ -118,23 +114,27 @@ class MainSpec extends AnyFlatSpec with Repeatable {
           Future.sequence(list.map{ case (f, _) =>
             isGteq30(new String(f.getV.toByteArray))
           }).map(_.filter(_.isDefined).map(_.get))
+        }.flatMap { list =>
+          findFollowersAgeGteq30(it).map{list ++ _}
         }
         case false => Future.successful(Seq.empty[(String, Int)])
       }
     }
 
-    val userId = Await.result(TestHelper.one(db.avetIndex.find(Datom(a = Some("users/:username"),
+    /*val userId = Await.result(TestHelper.one(db.avetIndex.find(Datom(a = Some("users/:username"),
       v = Some(ByteString.copyFrom("user-87".getBytes()))), false, avetOrdering)), Duration.Inf).map(_._1.getE).get
-
-    /*val followers = Await.result(TestHelper.all(db.aevtIndex.find(Datom(a = Some("users/:follows"), e = Some(userId)),
-      false, aevtOrdering)), Duration.Inf)*/
 
     val f = findFollowersAgeGteq30(db.aevtIndex.find(Datom(a = Some("users/:follows"), e = Some(userId)),
       false, aevtOrdering))
 
     val result = Await.result(f, Duration.Inf)
 
-    logger.debug(s"\n\nfollowers: ${result}${Console.RESET}\n\n")
+    logger.debug(s"\n${Console.BLUE_B}followers: ${result}${Console.RESET}${Console.RESET}\n")*/
+
+    val ages = Await.result(TestHelper.all(db.avetIndex.gt(Datom(a = Some("users/:age")), Datom(a = Some("users/:age"),
+      v = Some(ByteString.copyFrom(java.nio.ByteBuffer.allocate(4).putInt(71).flip()))), true, false)(prefixOrd, avetOrdering)), Duration.Inf)
+
+    logger.debug(s"\n\nages: ${ages.map{case (d, _) => printDatom(d, d.getA)}}${Console.RESET}\n\n")
 
     //logger.debug(s"\n\nfollowers: ${followers.map{case (d, _) => printDatom(d, d.getA)}}${Console.RESET}\n\n")
 }
