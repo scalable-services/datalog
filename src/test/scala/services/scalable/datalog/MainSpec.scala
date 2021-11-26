@@ -26,117 +26,121 @@ class MainSpec extends AnyFlatSpec with Repeatable {
 
   "index data " must "be equal to test data" in {
 
-    val logger = LoggerFactory.getLogger(this.getClass)
+      val logger = LoggerFactory.getLogger(this.getClass)
 
-    def printDatom(d: Datom, p: String): String = {
-      p match {
-        case "users/:tweet" => s"${Console.GREEN_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
-        case "users/:tweetedBy" => s"${Console.RED_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
-        case "users/:username" => s"${Console.MAGENTA_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
-        case "users/:email" => s"[${Console.CYAN_B}${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
-        case "users/:likes" => s"${Console.YELLOW_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
-        case "users/:follows" => s"${Console.BLUE_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
-        case "users/:age" => s"${Console.CYAN_B}[${d.a},${java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()},${d.e},${d.t}]${Console.RESET}"
-        case _ => ""
-      }
-    }
-
-    val bytes = new FileInputStream("twitter.db").readAllBytes()
-    val datoms = Any.parseFrom(bytes).unpack(FileDB).datoms
-
-    val db = new DatomDatabase("twitter-db", 64, 64)
-
-    //logger.debug(s"idata: ${datoms.map{d => printDatom(d, d.getA)}}\n")
-
-    val EMPTY_ARRAY = Array.empty[Byte]
-    Await.result(db.insert(datoms.map{_ -> EMPTY_ARRAY}), Duration.Inf)
-
-    val list = Await.result(TestHelper.all(db.avetIndex.inOrder()(db.avetOrdering)), Duration.Inf)
-    logger.debug(s"avet: ${list.map{case (k, v) => printDatom(k, k.getA)}}")
-
-    val prefixOrd = new Ordering[Datom] {
-      override def compare(k: Datom, prefix: Datom): Int = {
-        ord.compare(k.getA.getBytes(), prefix.getA.getBytes())
-      }
-    }
-
-    val aevtOrdering = new Ordering[Datom] {
-      override def compare(x: Datom, y: Datom): Int = {
-        val r = ord.compare(x.getA.getBytes(), y.getA.getBytes())
-
-        if(r != 0) return r
-
-        ord.compare(x.getE.getBytes(), y.getE.getBytes())
-      }
-    }
-
-    val avetOrdering = new Ordering[Datom] {
-      override def compare(x: Datom, y: Datom): Int = {
-        val r = ord.compare(x.getA.getBytes(), y.getA.getBytes())
-
-        if(r != 0) return r
-
-        ord.compare(x.getV.toByteArray, y.getV.toByteArray)
-      }
-    }
-
-    val eavtOrdering = new Ordering[Datom] {
-      override def compare(x: Datom, y: Datom): Int = {
-        var r = ord.compare(x.getE.getBytes(), y.getE.getBytes())
-
-        if(r != 0) return r
-
-        ord.compare(x.getA.getBytes(), y.getA.getBytes())
-      }
-    }
-
-    // Checks if the follower's age is >= 30 and returns its username
-    def isGteq30(followeeId: String): Future[Option[(String, Int)]] = {
-      TestHelper.one(db.eavtIndex.find(Datom(e = Some(followeeId), a = Some("users/:age")), false, eavtOrdering))
-        .flatMap {
-          case None => Future.successful(None)
-          case Some((d, _)) =>
-
-            val age = java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()
-
-            if(age >= 30){
-              TestHelper.one(db.eavtIndex.find(Datom(e = Some(followeeId), a = Some("users/:username")), false, eavtOrdering))
-                .map(_.map(_._1.getV.toStringUtf8 -> age))
-            } else {
-              Future.successful(None)
-            }
+      def printDatom(d: Datom, p: String): String = {
+        p match {
+          case "users/:tweet" => s"${Console.GREEN_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
+          case "users/:tweetedBy" => s"${Console.RED_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
+          case "users/:username" => s"${Console.MAGENTA_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
+          case "users/:email" => s"[${Console.CYAN_B}${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
+          case "users/:likes" => s"${Console.YELLOW_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
+          case "users/:follows" => s"${Console.BLUE_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
+          case "users/:age" => s"${Console.CYAN_B}[${d.a},${java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()},${d.e},${d.t}]${Console.RESET}"
+          case _ => ""
         }
-    }
-
-    def findFollowersAgeGteq30(it: RichAsyncIterator[Datom, Bytes]): Future[Seq[(String, Int)]] = {
-      it.hasNext().flatMap {
-        case true => it.next().flatMap { list =>
-          Future.sequence(list.map{ case (f, _) =>
-            isGteq30(new String(f.getV.toByteArray))
-          }).map(_.filter(_.isDefined).map(_.get))
-        }.flatMap { list =>
-          findFollowersAgeGteq30(it).map{list ++ _}
-        }
-        case false => Future.successful(Seq.empty[(String, Int)])
       }
-    }
 
-    /*val userId = Await.result(TestHelper.one(db.avetIndex.find(Datom(a = Some("users/:username"),
-      v = Some(ByteString.copyFrom("user-87".getBytes()))), false, avetOrdering)), Duration.Inf).map(_._1.getE).get
+      val bytes = new FileInputStream("twitter.db").readAllBytes()
+      val datoms = Any.parseFrom(bytes).unpack(FileDB).datoms
 
-    val f = findFollowersAgeGteq30(db.aevtIndex.find(Datom(a = Some("users/:follows"), e = Some(userId)),
-      false, aevtOrdering))
+      val db = new DatomDatabase("twitter-db", 64, 64)
 
-    val result = Await.result(f, Duration.Inf)
+      //logger.debug(s"idata: ${datoms.map{d => printDatom(d, d.getA)}}\n")
 
-    logger.debug(s"\n${Console.BLUE_B}followers: ${result}${Console.RESET}${Console.RESET}\n")*/
+      val EMPTY_ARRAY = Array.empty[Byte]
+      Await.result(db.insert(datoms.map{_ -> EMPTY_ARRAY}), Duration.Inf)
 
-    val ages = Await.result(TestHelper.all(db.avetIndex.gt(Datom(a = Some("users/:age")), Datom(a = Some("users/:age"),
-      v = Some(ByteString.copyFrom(java.nio.ByteBuffer.allocate(4).putInt(71).flip()))), true, false)(prefixOrd, avetOrdering)), Duration.Inf)
+      val list = Await.result(TestHelper.all(db.avetIndex.inOrder()(db.avetOrdering)), Duration.Inf)
+      logger.debug(s"avet: ${list.map{case (k, v) => printDatom(k, k.getA)}}")
 
-    logger.debug(s"\n\nages: ${ages.map{case (d, _) => printDatom(d, d.getA)}}${Console.RESET}\n\n")
+      val prefixOrd = new Ordering[Datom] {
+        override def compare(k: Datom, prefix: Datom): Int = {
+          ord.compare(k.getA.getBytes(), prefix.getA.getBytes())
+        }
+      }
 
-    //logger.debug(s"\n\nfollowers: ${followers.map{case (d, _) => printDatom(d, d.getA)}}${Console.RESET}\n\n")
-}
+      val aevtOrdering = new Ordering[Datom] {
+        override def compare(x: Datom, y: Datom): Int = {
+          val r = ord.compare(x.getA.getBytes(), y.getA.getBytes())
+
+          if(r != 0) return r
+
+          ord.compare(x.getE.getBytes(), y.getE.getBytes())
+        }
+      }
+
+      val avetOrdering = new Ordering[Datom] {
+        override def compare(x: Datom, y: Datom): Int = {
+          val r = ord.compare(x.getA.getBytes(), y.getA.getBytes())
+
+          if(r != 0) return r
+
+          ord.compare(x.getV.toByteArray, y.getV.toByteArray)
+        }
+      }
+
+      val eavtOrdering = new Ordering[Datom] {
+        override def compare(x: Datom, y: Datom): Int = {
+          var r = ord.compare(x.getE.getBytes(), y.getE.getBytes())
+
+          if(r != 0) return r
+
+          ord.compare(x.getA.getBytes(), y.getA.getBytes())
+        }
+      }
+
+      // Checks if the follower's age is >= 25 and returns its username
+      def checkCond(followeeId: String): Future[Option[(String, Int)]] = {
+        TestHelper.one(db.eavtIndex.find(Datom(e = Some(followeeId), a = Some("users/:age")), false, eavtOrdering))
+          .flatMap {
+            case None => Future.successful(None)
+            case Some((d, _)) =>
+
+              val age = java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()
+
+              if(age >= 25){
+                TestHelper.one(db.eavtIndex.find(Datom(e = Some(followeeId), a = Some("users/:username")), false, eavtOrdering))
+                  .map(_.map(_._1.getV.toStringUtf8 -> age))
+              } else {
+                Future.successful(None)
+              }
+          }
+      }
+
+      def filterFollowers(it: RichAsyncIterator[Datom, Bytes]): Future[Seq[(String, Int)]] = {
+        it.hasNext().flatMap {
+          case true => it.next().flatMap { list =>
+            Future.sequence(list.map{ case (f, _) =>
+              checkCond(new String(f.getV.toByteArray))
+            }).map(_.filter(_.isDefined).map(_.get))
+          }.flatMap { list =>
+            filterFollowers(it).map{list ++ _}
+          }
+          case false => Future.successful(Seq.empty[(String, Int)])
+        }
+      }
+
+      def findFollowers(username: String): Future[Seq[(String, Int)]] = {
+        TestHelper.one(db.avetIndex.find(Datom(a = Some("users/:username"),
+          v = Some(ByteString.copyFrom(username.getBytes()))), false, avetOrdering)).flatMap {
+          case None => Future.successful(Seq.empty[(String, Int)])
+          case Some((d, _)) => filterFollowers(
+            db.aevtIndex.find(Datom(a = Some("users/:follows"), e = Some(d.getE)), false, aevtOrdering)
+          )
+        }
+      }
+
+      val result = Await.result(findFollowers("user-87"), Duration.Inf)
+
+      logger.debug(s"\n${Console.BLUE_B}followers: ${result}${Console.RESET}${Console.RESET}\n")
+
+      /*val ages = Await.result(TestHelper.all(db.avetIndex.gt(Datom(a = Some("users/:age")), Datom(a = Some("users/:age"),
+        v = Some(ByteString.copyFrom(java.nio.ByteBuffer.allocate(4).putInt(71).flip()))), true, false)(prefixOrd, avetOrdering)), Duration.Inf)
+
+      logger.debug(s"\n\nages: ${ages.map{case (d, _) => printDatom(d, d.getA)}}${Console.RESET}\n\n")*/
+
+      //logger.debug(s"\n\nfollowers: ${followers.map{case (d, _) => printDatom(d, d.getA)}}${Console.RESET}\n\n")
+  }
 
 }
