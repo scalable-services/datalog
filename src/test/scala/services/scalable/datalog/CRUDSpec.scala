@@ -123,6 +123,18 @@ class CRUDSpec extends AnyFlatSpec {
       Await.result(db.save(), Duration.Inf)
     }*/
 
+    Await.result(db.update(Seq(
+      Datom(
+        e = Some("c500032d-32c4-49e3-b759-cf345e9625b0"),
+        a = Some("users/:color"),
+        v = Some(ByteString.copyFrom("red".getBytes())),
+        t = Some(System.currentTimeMillis()),
+        op = Some(true)
+      ) -> Array.empty[Byte]
+    )), Duration.Inf)
+
+    Await.result(db.save(), Duration.Inf)
+
     val data = Await.result(TestHelper.all(db.vaetIndex.inOrder()(db.vaetOrdering)), Duration.Inf)
     logger.debug(s"\n${Console.GREEN_B}data: ${data.map{case (k, v) => printDatom(k, k.getA)}}${Console.RESET}\n")
 

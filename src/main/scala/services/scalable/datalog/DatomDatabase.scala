@@ -258,7 +258,27 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
     Future.sequence(inserts).map(_ => true)
   }
 
-  def update(data: Seq[Tuple2[Datom, Bytes]]): Future[Boolean] = {
+  val findOrd = new Ordering[Datom] {
+    override def compare(x: Datom, y: Datom): Int = {
+      val r = ord.compare(x.getE.getBytes(), y.getE.getBytes())
+
+      if(r != 0) return r
+
+      ord.compare(x.getA.getBytes(), y.getA.getBytes())
+    }
+  }
+
+  protected def find(e: String, a: String): Future[Option[Datom]] = {
+    val it = eavtIndex.find(Datom(e = Some(e), a = Some(a)), false, findOrd)
+    it.setLimit(1)
+
+    it.hasNext().flatMap {
+      case true => it.next().map(_.headOption.map(_._1))
+      case false => Future.successful(None)
+    }
+  }
+
+  /*def update(data: Seq[Tuple2[Datom, Bytes]]): Future[Boolean] = {
     val updates = Seq(
       eavtIndex.update(data)(eavtOrdering),
       aevtIndex.update(data)(aevtOrdering),
@@ -267,6 +287,16 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
     )
 
     Future.sequence(updates).map(_ => true)
+  }*/
+
+  def update(data: Seq[Tuple2[Datom, Bytes]]): Future[Boolean] = {
+    val ids = data.map{case (d, _) => d.getE -> d.getA}
+
+    Future.sequence(ids.map{case (e, a) => find(e, a)}).flatMap { datoms =>
+      remove(datoms.map(_.get)).flatMap { ok =>
+        insert(data)
+      }
+    }
   }
 
   def remove(data: Seq[Datom]): Future[Boolean] = {
