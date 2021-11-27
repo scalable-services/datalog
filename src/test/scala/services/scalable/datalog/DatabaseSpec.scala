@@ -1,16 +1,14 @@
 package services.scalable.datalog
 
+import com.google.protobuf.any.Any
 import org.scalatest.flatspec.AnyFlatSpec
 import org.slf4j.LoggerFactory
+import services.scalable.datalog.grpc.{Datom, FileDB}
+import services.scalable.index.DefaultSerializers._
+import services.scalable.index.impl.{DefaultCache, GrpcByteSerializer}
+import services.scalable.index.{Bytes, Serializer}
 
 import java.io.FileInputStream
-import com.google.protobuf.any.Any
-import services.scalable.datalog.grpc.{Datom, FileDB}
-import services.scalable.index.{Bytes, Serializer}
-import services.scalable.index.impl.{CassandraStorage, DefaultCache, GrpcByteSerializer, MemoryStorage}
-import services.scalable.index.DefaultComparators._
-import services.scalable.index.DefaultSerializers._
-
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
@@ -63,7 +61,7 @@ class DatabaseSpec extends AnyFlatSpec {
 
     logger.debug(s"insertion: ${result}")*/
 
-    val idata = Await.result(TestHelper.all(db.eavtIndex.inOrder()(db.eavtOrdering)), Duration.Inf)
+    val idata = Await.result(TestHelper.all(db.vaetIndex.inOrder()(db.vaetOrdering)), Duration.Inf)
       .map{case (d, _) => printDatom(d, d.getA)}
 
     logger.debug(s"${Console.MAGENTA_B}idata: ${idata}${Console.RESET}\n")
