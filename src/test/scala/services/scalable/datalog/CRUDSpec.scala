@@ -138,6 +138,7 @@ class CRUDSpec extends AnyFlatSpec {
 
     now = System.currentTimeMillis()
 
+    // Inserting new info
     datoms = Seq(
       Datom(
         e = Some(id),
