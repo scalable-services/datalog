@@ -122,17 +122,6 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
   var vaetIndex: QueryableIndex[Datom, Bytes] = null
   var vaetCtx: DefaultContext[Datom, Bytes] = null
 
-  def insert(data: Seq[Tuple2[Datom, Bytes]]): Future[Boolean] = {
-    val inserts = Seq(
-      eavtIndex.insert(data)(eavtOrdering),
-      aevtIndex.insert(data)(aevtOrdering),
-      avetIndex.insert(data)(avetOrdering),
-      vaetIndex.insert(data)(vaetOrdering)
-    )
-
-    Future.sequence(inserts).map(_ => true)
-  }
-
   val KEYSPACE = "indexes"
 
   val session = CqlSession
@@ -222,7 +211,6 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
   )
 
   def save(): Future[Boolean] = {
-
     val contexts = getContexts()
 
     contexts.foreach { ctx =>
@@ -257,6 +245,39 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
 
         r
       }
+  }
+
+  def insert(data: Seq[Tuple2[Datom, Bytes]]): Future[Boolean] = {
+    val inserts = Seq(
+      eavtIndex.insert(data)(eavtOrdering),
+      aevtIndex.insert(data)(aevtOrdering),
+      avetIndex.insert(data)(avetOrdering),
+      vaetIndex.insert(data)(vaetOrdering)
+    )
+
+    Future.sequence(inserts).map(_ => true)
+  }
+
+  def update(data: Seq[Tuple2[Datom, Bytes]]): Future[Boolean] = {
+    val updates = Seq(
+      eavtIndex.update(data)(eavtOrdering),
+      aevtIndex.update(data)(aevtOrdering),
+      avetIndex.update(data)(avetOrdering),
+      vaetIndex.update(data)(vaetOrdering)
+    )
+
+    Future.sequence(updates).map(_ => true)
+  }
+
+  def remove(data: Seq[Datom]): Future[Boolean] = {
+    val updates = Seq(
+      eavtIndex.remove(data)(eavtOrdering),
+      aevtIndex.remove(data)(aevtOrdering),
+      avetIndex.remove(data)(avetOrdering),
+      vaetIndex.remove(data)(vaetOrdering)
+    )
+
+    Future.sequence(updates).map(_ => true)
   }
 
 }
