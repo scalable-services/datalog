@@ -26,7 +26,7 @@ class MainSpec extends AnyFlatSpec with Repeatable {
 
   "index data " must "be equal to test data" in {
 
-      val logger = LoggerFactory.getLogger(this.getClass)
+      /*val logger = LoggerFactory.getLogger(this.getClass)
 
       def printDatom(d: Datom, p: String): String = {
         p match {
@@ -133,7 +133,7 @@ class MainSpec extends AnyFlatSpec with Repeatable {
 
       val result = Await.result(findFollowers("user-8"), Duration.Inf)
 
-      logger.debug(s"\n${Console.BLUE_B}followers: ${result}${Console.RESET}${Console.RESET}\n")
+      logger.debug(s"\n${Console.BLUE_B}followers: ${result}${Console.RESET}${Console.RESET}\n")*/
 
       /*val ages = Await.result(TestHelper.all(db.avetIndex.gt(Datom(a = Some("users/:age")), Datom(a = Some("users/:age"),
         v = Some(ByteString.copyFrom(java.nio.ByteBuffer.allocate(4).putInt(71).flip()))), true, false)(prefixOrd, avetOrdering)), Duration.Inf)

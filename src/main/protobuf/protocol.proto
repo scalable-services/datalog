@@ -1,6 +1,5 @@
 syntax = "proto3";
 
-
 //#options
 option java_multiple_files = true;
 option java_package = "services.scalable.datalog.grpc";
@@ -23,6 +22,20 @@ message Datom {
   optional string e = 3;
   optional int64 t = 4;
   optional bool op = 5;
+}
+
+message IndexMeta {
+  string root = 1;
+}
+
+message DBMeta {
+  string name = 1;
+  int32 numLeafEntries = 2;
+  int32 numMetaEntries = 3;
+  optional IndexMeta eavtRoot = 4;
+  optional IndexMeta aevtRoot = 5;
+  optional IndexMeta avetRoot = 6;
+  optional IndexMeta vaetRoot = 7;
 }
 
 message FileDB {

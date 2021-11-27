@@ -18,6 +18,7 @@
 
     <logger name="services.scalable.datalog" level="debug"></logger>
     <logger name="services.scalable.index" level="error"></logger>
+    <logger name="com.datastax.oss.driver" level="error"></logger>
 
     <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
         <queueSize>1024</queueSize>

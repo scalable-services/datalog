@@ -1,13 +1,26 @@
 package services.scalable.datalog
 
-import services.scalable.datalog.grpc.Datom
-import services.scalable.index.{Bytes, QueryableIndex}
+import com.datastax.oss.driver.api.core.CqlSession
+import com.datastax.oss.driver.api.core.cql.{BatchStatement, DefaultBatchType}
+import services.scalable.datalog.grpc.{DBMeta, Datom, IndexMeta}
+import services.scalable.index.{Block, Bytes, Cache, Context, Leaf, QueryableIndex, Serializer, Storage, loader}
 import services.scalable.index.DefaultComparators.ord
 import services.scalable.index.impl.{DefaultCache, DefaultContext, MemoryStorage}
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.jdk.FutureConverters._
+import com.google.protobuf.any.Any
+import org.slf4j.LoggerFactory
 
-class DatomDatabase(val indexId: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_ENTRIES: Int)(implicit val ec: ExecutionContext) {
+import java.nio.ByteBuffer
+
+class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_ENTRIES: Int)
+                   (implicit val ec: ExecutionContext,
+                    val serializer: Serializer[Block[Datom, Bytes]],
+                    val cache: Cache[Datom, Bytes],
+                    val storage: Storage[Datom, Bytes]) {
+
+  val logger = LoggerFactory.getLogger(this.getClass)
 
   implicit val eavtOrdering = new Ordering[Datom] {
     override def compare(x: Datom, y: Datom): Int = {
@@ -97,30 +110,153 @@ class DatomDatabase(val indexId: String, val NUM_LEAF_ENTRIES: Int, val NUM_META
     }
   }
 
-  implicit val cache = new DefaultCache[Datom, Bytes](MAX_PARENT_ENTRIES = 80000)
-  implicit val storage = new MemoryStorage[Datom, Bytes](NUM_LEAF_ENTRIES, NUM_META_ENTRIES)
+  var eavtIndex: QueryableIndex[Datom, Bytes] = null
+  var eavtCtx: DefaultContext[Datom, Bytes] = null
 
-  val eavtCtx = new DefaultContext[Datom, Bytes](s"$indexId-eavt", None, NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, eavtOrdering)
-  val eavtIndex = new QueryableIndex[Datom, Bytes]()(ec, eavtCtx, eavtOrdering)
+  var aevtIndex: QueryableIndex[Datom, Bytes] = null
+  var aevtCtx: DefaultContext[Datom, Bytes] = null
 
-  val aevtCtx = new DefaultContext[Datom, Bytes](s"$indexId-aevt", None, NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, aevtOrdering)
-  val aevtIndex = new QueryableIndex[Datom, Bytes]()(ec, aevtCtx, aevtOrdering)
+  var avetIndex: QueryableIndex[Datom, Bytes] = null
+  var avetCtx: DefaultContext[Datom, Bytes] = null
 
-  val avetCtx = new DefaultContext[Datom, Bytes](s"$indexId-avet", None, NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, avetOrdering)
-  val avetIndex = new QueryableIndex[Datom, Bytes]()(ec, avetCtx, avetOrdering)
-
-  val vaetCtx = new DefaultContext[Datom, Bytes](s"$indexId-vaet", None, NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, vaetOrdering)
-  val vaetIndex = new QueryableIndex[Datom, Bytes]()(ec, vaetCtx, vaetOrdering)
+  var vaetIndex: QueryableIndex[Datom, Bytes] = null
+  var vaetCtx: DefaultContext[Datom, Bytes] = null
 
   def insert(data: Seq[Tuple2[Datom, Bytes]]): Future[Boolean] = {
-    for {
-      r1 <- eavtIndex.insert(data)(eavtOrdering).flatMap(_ => eavtCtx.save())
-      r2 <- aevtIndex.insert(data)(aevtOrdering).flatMap(_ => aevtCtx.save())
-      r3 <- avetIndex.insert(data)(avetOrdering).flatMap(_ => avetCtx.save())
-      r4 <- vaetIndex.insert(data)(vaetOrdering).flatMap(_ => vaetCtx.save())
-    } yield {
-      true
+    val inserts = Seq(
+      eavtIndex.insert(data)(eavtOrdering),
+      aevtIndex.insert(data)(aevtOrdering),
+      avetIndex.insert(data)(avetOrdering),
+      vaetIndex.insert(data)(vaetOrdering)
+    )
+
+    Future.sequence(inserts).map(_ => true)
+  }
+
+  val KEYSPACE = "indexes"
+
+  val session = CqlSession
+    .builder()
+    .withConfigLoader(loader)
+    .withKeyspace(KEYSPACE)
+    .build()
+
+  val INSERT = session.prepare("insert into meta(name, num_leaf_entries, num_meta_entries, roots) values (:name, :le, :me, :roots);")
+  val INSERT_BLOCK = session.prepare("insert into blocks(id, bin, leaf, size) values (:id, :bin, :leaf, :size);")
+  val READ_ROOTS = session.prepare("select * from meta where name = :name;")
+  val UPDATE_ROOTS = session.prepare("update meta set roots = :roots where name = :name;")
+
+  def create(): Future[Boolean] = {
+    val roots = DBMeta(name, NUM_LEAF_ENTRIES, NUM_META_ENTRIES)
+
+    eavtCtx = new DefaultContext[Datom, Bytes](s"$name-eavt", None, NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, eavtOrdering)
+    eavtIndex = new QueryableIndex[Datom, Bytes]()(ec, eavtCtx, eavtOrdering)
+
+    aevtCtx = new DefaultContext[Datom, Bytes](s"$name-aevt", None, NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, aevtOrdering)
+    aevtIndex = new QueryableIndex[Datom, Bytes]()(ec, aevtCtx, aevtOrdering)
+
+    avetCtx = new DefaultContext[Datom, Bytes](s"$name-avet", None, NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, avetOrdering)
+    avetIndex = new QueryableIndex[Datom, Bytes]()(ec, avetCtx, avetOrdering)
+
+    vaetCtx = new DefaultContext[Datom, Bytes](s"$name-vaet", None, NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, vaetOrdering)
+    vaetIndex = new QueryableIndex[Datom, Bytes]()(ec, vaetCtx, vaetOrdering)
+
+    session.executeAsync(
+      INSERT
+      .bind()
+      .setString("name", name)
+      .setInt("le", NUM_LEAF_ENTRIES)
+      .setInt("me", NUM_META_ENTRIES)
+      .setByteBuffer("roots", ByteBuffer.wrap(Any.pack(roots).toByteArray)))
+      .asScala.map(_.wasApplied())
+  }
+
+  def loadOrCreate(): Future[Boolean] = {
+    session.executeAsync(READ_ROOTS.bind()
+    .setString("name", name)).asScala.flatMap { rs =>
+      val one = rs.one()
+
+      if(one == null){
+        create()
+      } else {
+        val roots = Any.parseFrom(one.getByteBuffer("roots").array()).unpack(DBMeta)
+
+        eavtCtx = new DefaultContext[Datom, Bytes](s"$name-eavt", roots.eavtRoot.map(_.root), NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, eavtOrdering)
+        eavtIndex = new QueryableIndex[Datom, Bytes]()(ec, eavtCtx, eavtOrdering)
+
+        aevtCtx = new DefaultContext[Datom, Bytes](s"$name-aevt", roots.aevtRoot.map(_.root), NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, aevtOrdering)
+        aevtIndex = new QueryableIndex[Datom, Bytes]()(ec, aevtCtx, aevtOrdering)
+
+        avetCtx = new DefaultContext[Datom, Bytes](s"$name-avet", roots.avetRoot.map(_.root), NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, avetOrdering)
+        avetIndex = new QueryableIndex[Datom, Bytes]()(ec, avetCtx, avetOrdering)
+
+        vaetCtx = new DefaultContext[Datom, Bytes](s"$name-vaet", roots.vaetRoot.map(_.root), NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, vaetOrdering)
+        vaetIndex = new QueryableIndex[Datom, Bytes]()(ec, vaetCtx, vaetOrdering)
+
+        Future.successful(true)
+      }
     }
+  }
+
+  def updateMeta(): Future[Boolean] = {
+    val roots = DBMeta(
+      name,
+      NUM_LEAF_ENTRIES,
+      NUM_META_ENTRIES,
+      Some(IndexMeta(eavtCtx.root.get)),
+      Some(IndexMeta(aevtCtx.root.get)),
+      Some(IndexMeta(avetCtx.root.get)),
+      Some(IndexMeta(vaetCtx.root.get))
+    )
+
+    session.executeAsync(UPDATE_ROOTS.bind()
+    .setByteBuffer("roots", ByteBuffer.wrap(Any.pack(roots).toByteArray))
+      .setString("name", name)).asScala.map(_.wasApplied())
+  }
+
+  def getContexts(): Seq[DefaultContext[Datom, Bytes]] = Seq(
+    eavtCtx,
+    aevtCtx,
+    avetCtx,
+    vaetCtx
+  )
+
+  def save(): Future[Boolean] = {
+
+    val contexts = getContexts()
+
+    contexts.foreach { ctx =>
+      ctx.blocks.foreach { case (_, b) =>
+        b.root = ctx.root
+      }
+    }
+
+    val stm = BatchStatement.builder(DefaultBatchType.LOGGED)
+
+    contexts.foreach { ctx =>
+      val blocks = ctx.blocks.map(_._2)
+
+      blocks.map { b =>
+        val bin = serializer.serialize(b)
+
+        stm.addStatement(INSERT_BLOCK.bind().setString("id", b.unique_id)
+          .setByteBuffer("bin", ByteBuffer.wrap(bin))
+          .setBoolean("leaf", b.isInstanceOf[Leaf[Datom, Bytes]])
+          .setLong("size", bin.length)
+        )
+      }
+    }
+
+    session.executeAsync(stm.build()).asScala.flatMap(ok => if(ok.wasApplied()) updateMeta() else Future.successful(false))
+      .map { r =>
+
+        contexts.foreach { ctx =>
+          ctx.blocks.clear()
+          ctx.parents.clear()
+        }
+
+        r
+      }
   }
 
 }
