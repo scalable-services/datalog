@@ -131,7 +131,7 @@ class MainSpec extends AnyFlatSpec with Repeatable {
         }
       }
 
-      val result = Await.result(findFollowers("user-87"), Duration.Inf)
+      val result = Await.result(findFollowers("user-8"), Duration.Inf)
 
       logger.debug(s"\n${Console.BLUE_B}followers: ${result}${Console.RESET}${Console.RESET}\n")
 
