@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory
 
 import java.nio.ByteBuffer
 
-class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_ENTRIES: Int)
+class DatomDatabase(val name: String, val KEYSPACE: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_ENTRIES: Int)
                    (implicit val ec: ExecutionContext,
                     val serializer: Serializer[Block[Datom, Bytes]],
                     val cache: Cache[Datom, Bytes],
@@ -121,8 +121,6 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
 
   var vaetIndex: QueryableIndex[Datom, Bytes] = null
   var vaetCtx: DefaultContext[Datom, Bytes] = null
-
-  val KEYSPACE = "indexes"
 
   val session = CqlSession
     .builder()
@@ -293,7 +291,7 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
     val ids = data.map{case (d, _) => d.getE -> d.getA}
 
     Future.sequence(ids.map{case (e, a) => find(e, a)}).flatMap { datoms =>
-      remove(datoms.map(_.get)).flatMap { ok =>
+      remove(datoms.filter(_.isDefined).map(_.get)).flatMap { ok =>
         insert(data)
       }
     }
