@@ -1,3 +1,4 @@
+organization := "services.scalable"
 name := "datalog"
 
 version := "0.1"
