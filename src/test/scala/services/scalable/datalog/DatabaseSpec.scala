@@ -1,12 +1,13 @@
 package services.scalable.datalog
 
+import com.datastax.oss.driver.api.core.CqlSession
 import com.google.protobuf.any.Any
 import org.scalatest.flatspec.AnyFlatSpec
 import org.slf4j.LoggerFactory
 import services.scalable.datalog.grpc.{Datom, FileDB}
 import services.scalable.index.DefaultSerializers._
 import services.scalable.index.impl.{DefaultCache, GrpcByteSerializer}
-import services.scalable.index.{Bytes, Serializer}
+import services.scalable.index.{Bytes, Serializer, loader}
 
 import java.io.FileInputStream
 import scala.concurrent.Await
@@ -19,18 +20,24 @@ class DatabaseSpec extends AnyFlatSpec {
 
   def printDatom(d: Datom, p: String): String = {
     p match {
-      case "users/:tweet" => s"${Console.GREEN_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
-      case "users/:tweetedBy" => s"${Console.RED_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
-      case "users/:username" => s"${Console.MAGENTA_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
-      case "users/:email" => s"[${Console.CYAN_B}${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
-      case "users/:likes" => s"${Console.YELLOW_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
-      case "users/:follows" => s"${Console.BLUE_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]${Console.RESET}"
-      case "users/:age" => s"${Console.CYAN_B}[${d.a},${java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()},${d.e},${d.t}]${Console.RESET}"
+      case "users/:tweet" => s"${Console.GREEN_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx}]${Console.RESET}"
+      case "users/:tweetedBy" => s"${Console.RED_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx}]${Console.RESET}"
+      case "users/:username" => s"${Console.MAGENTA_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx}]${Console.RESET}"
+      case "users/:email" => s"[${Console.CYAN_B}${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx}]${Console.RESET}"
+      case "users/:likes" => s"${Console.YELLOW_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx}]${Console.RESET}"
+      case "users/:follows" => s"${Console.BLUE_B}[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx}]${Console.RESET}"
+      case "users/:age" => s"${Console.CYAN_B}[${d.a},${java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()},${d.e},${d.tx}]${Console.RESET}"
       case _ => ""
     }
   }
 
   "index data " must "be equal to test data" in {
+
+    val session = CqlSession
+      .builder()
+      .withConfigLoader(loader)
+      .withKeyspace("indexes")
+      .build()
 
     val bytes = new FileInputStream("twitter.db").readAllBytes()
     val datoms = Any.parseFrom(bytes).unpack(FileDB).datoms
@@ -50,7 +57,7 @@ class DatabaseSpec extends AnyFlatSpec {
     implicit val cache = new DefaultCache[Datom, Bytes](MAX_PARENT_ENTRIES = 80000)
     implicit val storage = new CQLStorage(NUM_LEAF_ENTRIES, NUM_META_ENTRIES)
 
-    val db = new DatomDatabase("twitter-db", NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(global, grpcBlockSerializer, cache, storage)
+    val db = new DatomDatabase("twitter-db", NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(global, session, grpcBlockSerializer, cache, storage)
 
     var result = Await.result(db.loadOrCreate(), Duration.Inf)
 
@@ -65,6 +72,8 @@ class DatabaseSpec extends AnyFlatSpec {
       .map{case (d, _) => printDatom(d, d.getA)}
 
     logger.debug(s"${Console.MAGENTA_B}idata: ${idata}${Console.RESET}\n")
+
+    session.close()
   }
 
 }

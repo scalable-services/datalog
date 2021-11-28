@@ -20,8 +20,8 @@ message Datom {
   optional string a = 1;
   optional bytes v = 2;
   optional string e = 3;
-  optional int64 t = 4;
-  optional bool op = 5;
+  optional string tx = 4;
+  optional int64 tmp = 5;
 }
 
 message IndexMeta {

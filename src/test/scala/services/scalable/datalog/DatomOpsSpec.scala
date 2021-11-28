@@ -21,8 +21,8 @@ class DatomOpsSpec extends AnyFlatSpec {
 
     def printDatom(d: Datom, p: String): String = {
       p match {
-        case "users/:color" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t},${d.op}]"
-        case "users/:movie" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t},${d.op}]"
+        case "users/:color" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx},${d.tmp}]"
+        case "users/:movie" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx},${d.tmp}]"
         case _ => ""
       }
     }
@@ -43,11 +43,11 @@ class DatomOpsSpec extends AnyFlatSpec {
 
         if(r != 0) return r
 
-        r = x.getT.compareTo(y.getT)
+        r = x.getTx.compareTo(y.getTx)
 
         if(r != 0) return r
 
-        x.getOp.compareTo(y.getOp)
+        x.getTmp.compareTo(y.getTmp)
       }
     }
 
@@ -55,6 +55,8 @@ class DatomOpsSpec extends AnyFlatSpec {
     val NUM_META_ENTRIES = 5
 
     val indexId = "test_index"
+
+    val tx = UUID.randomUUID().toString
 
     implicit val cache = new DefaultCache[Datom, Bytes](MAX_PARENT_ENTRIES = 80000)
     //implicit val storage = new CassandraStorage[Bytes, Bytes](TestConfig.KEYSPACE, NUM_LEAF_ENTRIES, NUM_META_ENTRIES, truncate = true)
@@ -74,21 +76,7 @@ class DatomOpsSpec extends AnyFlatSpec {
 
         if(r != 0) return r
 
-        r = ord.compare(x.getA.getBytes(), y.getA.getBytes())
-
-        /*if(r != 0) return r
-
-        ord.compare(x.getV.toByteArray, y.getV.toByteArray)*/
-
-        /*if(r != 0) return r
-
-        r = x.getT.compareTo(y.getT)
-
-        if(r != 0) return r
-
-        x.getOp.compareTo(y.getOp)*/
-
-        r
+        ord.compare(x.getA.getBytes(), y.getA.getBytes())
       }
     }
 
@@ -105,16 +93,16 @@ class DatomOpsSpec extends AnyFlatSpec {
         e = Some(id),
         a = Some("users/:color"),
         v = Some(ByteString.copyFrom("blue".getBytes())),
-        t = Some(now),
-        op = Some(true)
+        tx = Some(tx),
+        tmp = Some(now)
       ) -> Array.empty[Byte],
 
       Datom(
         e = Some(id),
         a = Some("users/:movie"),
         v = Some(ByteString.copyFrom("Titanic".getBytes())),
-        t = Some(now),
-        op = Some(true)
+        tx = Some(tx),
+        tmp = Some(now)
       ) -> Array.empty[Byte]
     )
 
@@ -126,7 +114,7 @@ class DatomOpsSpec extends AnyFlatSpec {
     logger.debug(s"\n${Console.GREEN_B}data: ${idata.map{case (k, v) => printDatom(k, k.getA)}}${Console.RESET}\n")
 
     def find(a: String, now: Long): Option[Datom] = {
-      var it = index.find(Datom(e = Some(id), a = Some(a), op = Some(true), t = Some(now)), false, termOrd)
+      var it = index.find(Datom(e = Some(id), a = Some(a), tx = Some(tx), tmp = Some(now)), false, termOrd)
       Await.result(TestHelper.one(it), Duration.Inf).map(_._1)
     }
 
@@ -144,8 +132,8 @@ class DatomOpsSpec extends AnyFlatSpec {
         e = Some(id),
         a = Some("users/:color"),
         v = Some(ByteString.copyFrom("red".getBytes())),
-        t = Some(System.currentTimeMillis()),
-        op = Some(true)
+        tx = Some(tx),
+        tmp = Some(now)
       ) -> Array.empty[Byte]
     )
 

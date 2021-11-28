@@ -1,5 +1,6 @@
 package services.scalable.datalog
 
+import com.datastax.oss.driver.api.core.CqlSession
 import com.google.protobuf.ByteString
 import com.google.protobuf.any.Any
 import org.scalatest.flatspec.AnyFlatSpec
@@ -9,7 +10,7 @@ import services.scalable.index.DefaultComparators.ord
 import services.scalable.index.DefaultSerializers._
 import services.scalable.datalog.DefaultDatalogSerializers._
 import services.scalable.index.impl.{DefaultCache, GrpcByteSerializer}
-import services.scalable.index.{Bytes, Serializer}
+import services.scalable.index.{Bytes, Serializer, loader}
 
 import java.io.FileInputStream
 import java.util.UUID
@@ -24,14 +25,20 @@ class CRUDSpec extends AnyFlatSpec {
 
   def printDatom(d: Datom, p: String): String = {
     p match {
-      case "users/:color" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t},${d.op}]"
-      case "users/:movie" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t},${d.op}]"
-      case "users/:balance" => s"[${d.a},${java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()},${d.e},${d.t},${d.op}]"
+      case "users/:color" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx},${d.tmp}]"
+      case "users/:movie" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx},${d.tmp}]"
+      case "users/:balance" => s"[${d.a},${java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()},${d.e},${d.tx},${d.tmp}]"
       case _ => ""
     }
   }
 
   "index data " must "be equal to test data" in {
+
+    val session = CqlSession
+      .builder()
+      .withConfigLoader(loader)
+      .withKeyspace("indexes")
+      .build()
 
     val rand = ThreadLocalRandom.current()
 
@@ -43,7 +50,7 @@ class CRUDSpec extends AnyFlatSpec {
     implicit val cache = new DefaultCache[Datom, Bytes](MAX_PARENT_ENTRIES = 80000)
     implicit val storage = new CQLStorage(NUM_LEAF_ENTRIES, NUM_META_ENTRIES)
 
-    val db = new DatomDatabase("crud-db", "indexes", NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(global, grpcBlockSerializer, cache, storage)
+    val db = new DatomDatabase("crud-db", NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(global, session, grpcBlockSerializer, cache, storage)
 
     var result = Await.result(db.loadOrCreate(), Duration.Inf)
 
@@ -56,29 +63,31 @@ class CRUDSpec extends AnyFlatSpec {
     var now = System.currentTimeMillis()
     val balance = java.nio.ByteBuffer.allocate(4).putInt(rand.nextInt(0, 1000)).flip().array()
 
+    val tx = UUID.randomUUID().toString
+
     datoms :++= Seq(
       Datom(
         e = Some(id),
         a = Some("users/:color"),
         v = Some(ByteString.copyFrom("blue".getBytes())),
-        t = Some(now),
-        op = Some(true)
+        tx = Some(tx),
+        tmp = Some(now)
       ) -> EMPTY_ARRAY,
 
       Datom(
         e = Some(id),
         a = Some("users/:movie"),
         v = Some(ByteString.copyFrom("Titanic".getBytes())),
-        t = Some(now),
-        op = Some(true)
+        tx = Some(tx),
+        tmp = Some(now)
       ) -> EMPTY_ARRAY,
 
       Datom(
         e = Some(id),
         a = Some("users/:balance"),
         v = Some(ByteString.copyFrom(balance)),
-        t = Some(now),
-        op = Some(true)
+        tx = Some(tx),
+        tmp = Some(now)
       ) -> EMPTY_ARRAY
     )
 
@@ -159,6 +168,7 @@ class CRUDSpec extends AnyFlatSpec {
     val data = Await.result(TestHelper.all(db.eavtIndex.inOrder()(db.eavtOrdering)), Duration.Inf)
     logger.debug(s"\n${Console.GREEN_B}data: ${data.map{case (k, v) => printDatom(k, k.getA)}}${Console.RESET}\n")
 
+    session.close()
   }
 
 }

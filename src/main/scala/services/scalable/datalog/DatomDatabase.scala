@@ -14,8 +14,9 @@ import org.slf4j.LoggerFactory
 
 import java.nio.ByteBuffer
 
-class DatomDatabase(val name: String, val KEYSPACE: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_ENTRIES: Int)
+class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_ENTRIES: Int)
                    (implicit val ec: ExecutionContext,
+                    val session: CqlSession,
                     val serializer: Serializer[Block[Datom, Bytes]],
                     val cache: Cache[Datom, Bytes],
                     val storage: Storage[Datom, Bytes]) {
@@ -36,11 +37,11 @@ class DatomDatabase(val name: String, val KEYSPACE: String, val NUM_LEAF_ENTRIES
 
       if(r != 0) return r
 
-      r = x.getT.compareTo(y.getT)
+      r = x.getTx.compareTo(y.getTx)
 
       if(r != 0) return r
 
-      x.getOp.compareTo(y.getOp)
+      x.getTmp.compareTo(y.getTmp)
     }
   }
 
@@ -58,11 +59,11 @@ class DatomDatabase(val name: String, val KEYSPACE: String, val NUM_LEAF_ENTRIES
 
       if(r != 0) return r
 
-      r = x.getT.compareTo(y.getT)
+      r = x.getTx.compareTo(y.getTx)
 
       if(r != 0) return r
 
-      x.getOp.compareTo(y.getOp)
+      x.getTmp.compareTo(y.getTmp)
     }
   }
 
@@ -80,11 +81,11 @@ class DatomDatabase(val name: String, val KEYSPACE: String, val NUM_LEAF_ENTRIES
 
       if(r != 0) return r
 
-      r = x.getT.compareTo(y.getT)
+      r = x.getTx.compareTo(y.getTx)
 
       if(r != 0) return r
 
-      x.getOp.compareTo(y.getOp)
+      x.getTmp.compareTo(y.getTmp)
     }
   }
 
@@ -102,11 +103,11 @@ class DatomDatabase(val name: String, val KEYSPACE: String, val NUM_LEAF_ENTRIES
 
       if(r != 0) return r
 
-      r = x.getT.compareTo(y.getT)
+      r = x.getTx.compareTo(y.getTx)
 
       if(r != 0) return r
 
-      x.getOp.compareTo(y.getOp)
+      x.getTmp.compareTo(y.getTmp)
     }
   }
 
@@ -122,11 +123,11 @@ class DatomDatabase(val name: String, val KEYSPACE: String, val NUM_LEAF_ENTRIES
   var vaetIndex: QueryableIndex[Datom, Bytes] = null
   var vaetCtx: DefaultContext[Datom, Bytes] = null
 
-  val session = CqlSession
+  /*val session = CqlSession
     .builder()
     .withConfigLoader(loader)
     .withKeyspace(KEYSPACE)
-    .build()
+    .build()*/
 
   val INSERT = session.prepare("insert into meta(name, num_leaf_entries, num_meta_entries, roots) values (:name, :le, :me, :roots);")
   val INSERT_BLOCK = session.prepare("insert into blocks(id, bin, leaf, size) values (:id, :bin, :leaf, :size);")

@@ -22,17 +22,18 @@ class CreateFileDatabase extends AnyFlatSpec {
 
     def printDatom(d: Datom, p: String): String = {
       p match {
-        case "users/:tweet" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]"
-        case "users/:tweetedBy" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]"
-        case "users/:username" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]"
-        case "users/:likes" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]"
-        case "users/:email" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]"
-        case "users/:follows" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]"
-        case "users/:age" => s"[${d.a},${java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()},${d.e},${d.t}]"
+        case "users/:tweet" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx}]"
+        case "users/:tweetedBy" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx}]"
+        case "users/:username" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx}]"
+        case "users/:likes" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx}]"
+        case "users/:email" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx}]"
+        case "users/:follows" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx}]"
+        case "users/:age" => s"[${d.a},${java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()},${d.e},${d.tx}]"
         case _ => ""
       }
     }
 
+    val tx = UUID.randomUUID().toString
     val logger = LoggerFactory.getLogger(this.getClass)
 
     //val db = new DatomDatabase("twitter-db", 64, 64)
@@ -59,24 +60,24 @@ class CreateFileDatabase extends AnyFlatSpec {
           a = Some("users/:username"),
           v = Some(ByteString.copyFrom(username.getBytes())),
           e = Some(id),
-          t = Some(now),
-          op = Some(true)
+          tx = Some(tx),
+          tmp = Some(now)
         ),
 
         Datom(
           a = Some("users/:age"),
           v = Some(ByteString.copyFrom(java.nio.ByteBuffer.allocate(4).putInt(age).flip().array())),
           e = Some(id),
-          t = Some(now),
-          op = Some(true)
+          tx = Some(tx),
+          tmp = Some(now)
         ),
 
         Datom(
           a = Some("users/:email"),
           v = Some(ByteString.copyFrom(email.getBytes())),
           e = Some(id),
-          t = Some(now),
-          op = Some(true)
+          tx = Some(tx),
+          tmp = Some(now)
         )
 
       )
@@ -99,8 +100,8 @@ class CreateFileDatabase extends AnyFlatSpec {
             a = Some("users/:follows"),
             v = Some(ByteString.copyFrom(followee.getBytes())),
             e = Some(follower),
-            t = Some(now),
-            op = Some(true)
+            tx = Some(tx),
+            tmp = Some(now)
           )
 
         } else if(!followers(follower).exists{x => x.compareTo(followee) == 0}){
@@ -110,8 +111,8 @@ class CreateFileDatabase extends AnyFlatSpec {
             a = Some("users/:follows"),
             v = Some(ByteString.copyFrom(followee.getBytes())),
             e = Some(follower),
-            t = Some(now),
-            op = Some(true)
+            tx = Some(tx),
+            tmp = Some(now)
           )
 
         }
@@ -140,15 +141,15 @@ class CreateFileDatabase extends AnyFlatSpec {
           a = Some("users/:tweet"),
           v = Some(ByteString.copyFrom(tweet.getBytes())),
           e = Some(tweetId),
-          t = Some(now),
-          op = Some(true)
+          tx = Some(tx),
+          tmp = Some(now)
         ),
         Datom(
           a = Some("users/:tweetedBy"),
           v = Some(ByteString.copyFrom(user.getBytes())),
           e = Some(tweetId),
-          t = Some(now),
-          op = Some(true)
+          tx = Some(tx),
+          tmp = Some(now)
         )
       )
 
@@ -167,8 +168,8 @@ class CreateFileDatabase extends AnyFlatSpec {
               a = Some("users/:likes"),
               v = Some(ByteString.copyFrom(tweetId.getBytes())),
               e = Some(liker),
-              t = Some(now),
-              op = Some(true)
+              tx = Some(tx),
+              tmp = Some(now)
             )
           )
         }

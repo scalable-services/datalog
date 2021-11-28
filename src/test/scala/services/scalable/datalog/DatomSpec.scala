@@ -43,11 +43,11 @@ class DatomSpec extends AnyFlatSpec with Repeatable {
 
         if(r != 0) return r
 
-        r = x.getT.compareTo(y.getT)
+        r = x.getTx.compareTo(y.getTx)
 
         if(r != 0) return r
 
-        x.getOp.compareTo(y.getOp)
+        x.getTmp.compareTo(y.getTmp)
       }
     }
 
@@ -68,6 +68,7 @@ class DatomSpec extends AnyFlatSpec with Repeatable {
     val colors = Seq("red", "green", "blue", "yellow", "orange", "black", "white", "magenta", "gold", "brown", "pink", "cyan", "purple")
 
     def insert(index: Index[Datom, Bytes]): Unit = {
+      val tx = UUID.randomUUID().toString
 
       val n = rand.nextInt(1, 100)
 
@@ -86,10 +87,10 @@ class DatomSpec extends AnyFlatSpec with Repeatable {
 
         //AVET
         val datoms = Seq(
-          Datom(Some("users/:name"), Some(ByteString.copyFrom(name)), Some(id), Some(now), Some(true)),
-          Datom(Some("users/:age"), Some(ByteString.copyFrom(age)), Some(id), Some(now), Some(true)),
-          Datom(Some("users/:color"), Some(ByteString.copyFrom(color)), Some(id), Some(now), Some(true)),
-          Datom(Some("users/:height"), Some(ByteString.copyFrom(height)), Some(id), Some(now), Some(true))
+          Datom(Some("users/:name"), Some(ByteString.copyFrom(name)), Some(id), Some(tx), Some(now)),
+          Datom(Some("users/:age"), Some(ByteString.copyFrom(age)), Some(id), Some(tx), Some(now)),
+          Datom(Some("users/:color"), Some(ByteString.copyFrom(color)), Some(id), Some(tx), Some(now)),
+          Datom(Some("users/:height"), Some(ByteString.copyFrom(height)), Some(id), Some(tx), Some(now))
         )
 
         for(d <- datoms){
@@ -133,10 +134,10 @@ class DatomSpec extends AnyFlatSpec with Repeatable {
 
     def printDatom(d: Datom, p: String): String = {
       p match {
-        case "users/:name" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]"
-        case "users/:age" => s"[${d.a},${java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()},${d.e},${d.t}]"
-        case "users/:color" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.t}]"
-        case "users/:height" => s"[${d.a},${java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()},${d.e},${d.t}]"
+        case "users/:name" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx}]"
+        case "users/:age" => s"[${d.a},${java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()},${d.e},${d.tx}]"
+        case "users/:color" => s"[${d.a},${new String(d.getV.toByteArray)},${d.e},${d.tx}]"
+        case "users/:height" => s"[${d.a},${java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()},${d.e},${d.tx}]"
         //case "users/:height" => s"[${java.nio.ByteBuffer.allocate(4).put(d.getV.toByteArray).flip().getInt()}]"
         case _ => ""
       }
@@ -190,24 +191,24 @@ class DatomSpec extends AnyFlatSpec with Repeatable {
           val lv = rand.nextInt(18, 100)
           (Datom(a = Some(prefix), v = Some(ByteString.copyFrom(java.nio.ByteBuffer.allocate(4).putInt(lv).flip().array()))),
             Datom(a = Some(prefix), v = Some(ByteString.copyFrom(java.nio.ByteBuffer.allocate(4).putInt(lv).flip().array())),
-            e = Some("ffffffffffffffffffffffffffffffff"), t = Some(Long.MaxValue), op = Some(true)),
+            e = Some("ffffffffffffffffffffffffffffffff"), tx = Some("ffffffffffffffffffffffffffffffff"), tmp = Some(Long.MaxValue)),
             Datom(a = Some(prefix), v = Some(ByteString.copyFrom(java.nio.ByteBuffer.allocate(4).putInt(lv).flip().array())),
-              e = Some("00000000000000000000000000000000"), t = Some(Long.MinValue), op = Some(true)))
+              e = Some("00000000000000000000000000000000"), tx = Some("00000000000000000000000000000000"), tmp = Some(Long.MinValue)))
 
         case "users/:color" =>
 
           val lv = colors(rand.nextInt(0, colors.length))
           (Datom(Some(prefix), Some(ByteString.copyFrom(lv.getBytes()))),
-            Datom(Some(prefix), Some(ByteString.copyFrom(lv.getBytes())), e = Some("ffffffffffffffffffffffffffffffff"), t = Some(Long.MaxValue), op = Some(true)),
-            Datom(Some(prefix), Some(ByteString.copyFrom(lv.getBytes())), e = Some("00000000000000000000000000000000"), t = Some(Long.MinValue), op = Some(true)),
+            Datom(Some(prefix), Some(ByteString.copyFrom(lv.getBytes())), e = Some("ffffffffffffffffffffffffffffffff"), tx = Some("ffffffffffffffffffffffffffffffff"), tmp = Some(Long.MaxValue)),
+            Datom(Some(prefix), Some(ByteString.copyFrom(lv.getBytes())), e = Some("00000000000000000000000000000000"), tx = Some("00000000000000000000000000000000"), tmp = Some(Long.MinValue)),
           )
 
         case "users/:height" =>
 
           val lv = rand.nextInt(150, 210)
           (Datom(Some(prefix), Some(ByteString.copyFrom(java.nio.ByteBuffer.allocate(4).putInt(lv).flip().array()))),
-            Datom(Some(prefix), Some(ByteString.copyFrom(java.nio.ByteBuffer.allocate(4).putInt(lv).flip().array())), e = Some("ffffffffffffffffffffffffffffffff"), t = Some(Long.MaxValue), op = Some(true)),
-            Datom(Some(prefix), Some(ByteString.copyFrom(java.nio.ByteBuffer.allocate(4).putInt(lv).flip().array())), e = Some("00000000000000000000000000000000"), t = Some(Long.MinValue), op = Some(true))
+            Datom(Some(prefix), Some(ByteString.copyFrom(java.nio.ByteBuffer.allocate(4).putInt(lv).flip().array())), e = Some("ffffffffffffffffffffffffffffffff"), tx = Some("ffffffffffffffffffffffffffffffff"), tmp = Some(Long.MaxValue)),
+            Datom(Some(prefix), Some(ByteString.copyFrom(java.nio.ByteBuffer.allocate(4).putInt(lv).flip().array())), e = Some("00000000000000000000000000000000"), tx = Some("00000000000000000000000000000000"), tmp = Some(Long.MinValue))
           )
       }
     }
