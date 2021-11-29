@@ -1,12 +1,14 @@
 package services.scalable.datalog
 
 import com.datastax.oss.driver.api.core.CqlSession
+import com.google.common.base.Charsets
+import com.google.protobuf.ByteString
 import org.scalatest.flatspec.AnyFlatSpec
 import org.slf4j.LoggerFactory
 import services.scalable.datalog.DefaultDatalogSerializers.grpcBlockSerializer
 import services.scalable.datalog.grpc.Datom
 import services.scalable.index.impl.DefaultCache
-import services.scalable.index.{Bytes, loader}
+import services.scalable.index.{Bytes, RichAsyncIterator, loader}
 
 import java.util.concurrent.ThreadLocalRandom
 import scala.concurrent.{Await, Future}
@@ -14,6 +16,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import services.scalable.datalog.Helper
 import services.scalable.datalog.Implicits._
+import services.scalable.index.DefaultComparators.ord
 
 import java.util.UUID
 
@@ -151,7 +154,7 @@ class MovieDatabaseSpec extends AnyFlatSpec {
     var actorIds = Map.empty[String, String]
     var directorIds = Map.empty[String, String]
 
-    def insertMovies(tx: String): Future[Boolean] = {
+    def createMovies(tx: String): Seq[(Datom, Bytes)] = {
       val movies = Seq(
         Movie("Titanic", 1997, "Drama"),
         Movie("Jurassic Park", 1993, "Fiction"),
@@ -163,10 +166,10 @@ class MovieDatabaseSpec extends AnyFlatSpec {
         movieIds = movieIds + (m.title -> m.id)
       }
 
-      db.insert(movies.map(_.toDatom(tx)).flatten.map(_ -> EMPTY_ARRAY))
+      movies.map(_.toDatom(tx)).flatten.map(_ -> EMPTY_ARRAY)
     }
 
-    def insertActors(tx: String): Future[Boolean] = {
+    def createActors(tx: String): Seq[(Datom, Bytes)] = {
       val actors = Seq(
         Actor("Leonardo DiCaprio", 1974, "male"),
         Actor("Kate Winslet", 1975, "female"),
@@ -187,11 +190,11 @@ class MovieDatabaseSpec extends AnyFlatSpec {
         actorIds = actorIds + (a.name -> a.id)
       }
 
-      db.insert(actors.map(_.toDatom(tx)).flatten.map(_ -> EMPTY_ARRAY))
+      actors.map(_.toDatom(tx)).flatten.map(_ -> EMPTY_ARRAY)
     }
 
-    def insertPlays(tx: String): Future[Boolean] = {
-      val plays = Seq(
+    def createPlays(tx: String): Seq[(Datom, Bytes)] = {
+      Seq(
         PlayedAt(actorIds("Leonardo DiCaprio"), movieIds("Titanic")),
         PlayedAt(actorIds("Kate Winslet"), movieIds("Titanic")),
 
@@ -206,27 +209,88 @@ class MovieDatabaseSpec extends AnyFlatSpec {
         PlayedAt(actorIds("Leonardo DiCaprio"), movieIds("Inception")),
         PlayedAt(actorIds("Joseph Gordon-Levitt"), movieIds("Inception")),
         PlayedAt(actorIds("Elliot Page"), movieIds("Inception"))
-      )
-
-      db.insert(plays.map(_.toDatom(tx)).flatten.map(_ -> EMPTY_ARRAY))
+      ).map(_.toDatom(tx)).flatten.map(_ -> EMPTY_ARRAY)
     }
 
     val tx = UUID.randomUUID().toString
 
-    /*val task = for {
-      ok1 <- insertMovies(tx)
-      /*ok2 <- insertActors(tx)
-      ok3 <- insertPlays(tx)*/
-    } yield {
-      db.save()
-    }
-
+    /*val task = db.insert(createMovies(tx) ++ createActors(tx) ++ createPlays(tx)).flatMap(_ => db.save())
     val op = Await.result(task, Duration.Inf)
 
     logger.debug(s"\n${Console.MAGENTA_B}insertion: ${op}${Console.RESET}\n")*/
 
     val data = Await.result(TestHelper.all(db.eavtIndex.inOrder()(db.eavtOrdering)), Duration.Inf)
     logger.debug(s"\n${Console.GREEN_B}data: ${data.map{case (k, v) => printd(k, k.getA)}}${Console.RESET}\n")
+
+    val eavtTermFinder = new Ordering[Datom] {
+      override def compare(x: Datom, y: Datom): Int = {
+        val r = ord.compare(x.getE.getBytes(Charsets.UTF_8), y.getE.getBytes(Charsets.UTF_8))
+
+        if(r != 0) return r
+
+        ord.compare(x.getA.getBytes(), y.getA.getBytes())
+      }
+    }
+
+    val avetTermFinder = new Ordering[Datom] {
+      override def compare(x: Datom, y: Datom): Int = {
+        val r = ord.compare(x.getA.getBytes(Charsets.UTF_8), y.getA.getBytes(Charsets.UTF_8))
+
+        if(r != 0) return r
+
+        ord.compare(x.getV.toByteArray, y.getV.toByteArray)
+      }
+    }
+
+    def avetFind(a: String, value: Array[Byte]): Future[Option[Datom]] = {
+      val it = db.avetIndex.find(Datom(a = Some(a), v = Some(ByteString.copyFrom(value))), false, avetTermFinder)
+      TestHelper.one(it).map(_.map(_._1))
+    }
+
+    def eavtFind(a: String, e: String): Future[Option[Datom]] = {
+      val it = db.eavtIndex.find(Datom(a = Some(a), e = Some(e)), false, eavtTermFinder)
+      TestHelper.one(it).map(_.map(_._1))
+    }
+
+    def getMovieTitleById(id: String): Future[Option[String]] = {
+      eavtFind("movies/:title", id).map(_.map(_.getV.toStringUtf8))
+    }
+
+    def getMovieIdByTitle(title: String): Future[Option[String]] = {
+      avetFind("movies/:title", Helper.write(title)).map(_.map(_.getE))
+    }
+
+    def getActorIdByName(name: String): Future[Option[String]] = {
+      avetFind("actors/:name", Helper.write(name)).map(_.map(_.getE))
+    }
+
+    def getMoviesPlayedBy(actor: String): Future[Seq[String]] = {
+      getActorIdByName(actor).flatMap {
+        case None => Future.successful(Seq.empty[String])
+        case Some(id) =>
+
+          // We can use a stream here with no problems... But for demonstration purposes let's get all movies
+          TestHelper.all(
+            db.eavtIndex.find(Datom(
+              e = Some(id),
+              a = Some("actors/:played")
+            ), false, eavtTermFinder)
+          ).map(_.map(_._1.getV.toStringUtf8)).flatMap { movies =>
+            Future.sequence(movies.map{getMovieTitleById(_)}).map(_.filter(_.isDefined).map(_.get))
+          }
+      }
+    }
+
+    /*val id = Await.result(for {
+      movieId <- getMovieIdByTitle("Titanic")
+      actorId <- getActorIdByName("Leonardo DiCaprio")
+    } yield Seq(movieId, actorId), Duration.Inf)
+
+    logger.debug(s"\n${Console.MAGENTA_B}query results: ${id}${Console.RESET}\n")*/
+
+    val movies = Await.result(getMoviesPlayedBy("Leonardo DiCaprio"), Duration.Inf)
+
+    logger.debug(s"\n${Console.MAGENTA_B}query results: ${movies}${Console.RESET}\n")
 
     session.close()
   }
