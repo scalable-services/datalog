@@ -10,16 +10,11 @@ import scala.concurrent.{ExecutionContext, Future}
 
 class CQLStorage(val NUM_LEAF_ENTRIES: Int, val NUM_META_ENTRIES: Int)
                 (implicit val ec: ExecutionContext,
+                 val session: CqlSession,
                  val serializer: Serializer[Block[Datom, Bytes]]
                 ) extends Storage[Datom, Bytes]{
 
   val logger = LoggerFactory.getLogger(this.getClass)
-
-  val session = CqlSession
-    .builder()
-    .withConfigLoader(loader)
-    .withKeyspace("indexes")
-    .build()
 
   val SELECT = session.prepare("select * from blocks where id=?;")
 

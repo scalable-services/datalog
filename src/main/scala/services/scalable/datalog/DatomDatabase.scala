@@ -159,6 +159,35 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
       .asScala.map(_.wasApplied())
   }
 
+  def loadFromMeta(roots: DBMeta): Unit = {
+    eavtCtx = new DefaultContext[Datom, Bytes](s"$name-eavt", roots.eavtRoot.map(_.root), NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, eavtOrdering)
+    eavtIndex = new QueryableIndex[Datom, Bytes]()(ec, eavtCtx, eavtOrdering)
+
+    aevtCtx = new DefaultContext[Datom, Bytes](s"$name-aevt", roots.aevtRoot.map(_.root), NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, aevtOrdering)
+    aevtIndex = new QueryableIndex[Datom, Bytes]()(ec, aevtCtx, aevtOrdering)
+
+    avetCtx = new DefaultContext[Datom, Bytes](s"$name-avet", roots.avetRoot.map(_.root), NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, avetOrdering)
+    avetIndex = new QueryableIndex[Datom, Bytes]()(ec, avetCtx, avetOrdering)
+
+    vaetCtx = new DefaultContext[Datom, Bytes](s"$name-vaet", roots.vaetRoot.map(_.root), NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, vaetOrdering)
+    vaetIndex = new QueryableIndex[Datom, Bytes]()(ec, vaetCtx, vaetOrdering)
+  }
+
+  def load(): Future[Boolean] = {
+    session.executeAsync(READ_ROOTS.bind()
+      .setString("name", name)).asScala.map { rs =>
+      val one = rs.one()
+
+      if(one == null){
+        false
+      } else {
+        val roots = Any.parseFrom(one.getByteBuffer("roots").array()).unpack(DBMeta)
+        loadFromMeta(roots)
+        true
+      }
+    }
+  }
+
   def loadOrCreate(): Future[Boolean] = {
     session.executeAsync(READ_ROOTS.bind()
     .setString("name", name)).asScala.flatMap { rs =>
@@ -168,19 +197,7 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
         create()
       } else {
         val roots = Any.parseFrom(one.getByteBuffer("roots").array()).unpack(DBMeta)
-
-        eavtCtx = new DefaultContext[Datom, Bytes](s"$name-eavt", roots.eavtRoot.map(_.root), NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, eavtOrdering)
-        eavtIndex = new QueryableIndex[Datom, Bytes]()(ec, eavtCtx, eavtOrdering)
-
-        aevtCtx = new DefaultContext[Datom, Bytes](s"$name-aevt", roots.aevtRoot.map(_.root), NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, aevtOrdering)
-        aevtIndex = new QueryableIndex[Datom, Bytes]()(ec, aevtCtx, aevtOrdering)
-
-        avetCtx = new DefaultContext[Datom, Bytes](s"$name-avet", roots.avetRoot.map(_.root), NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, avetOrdering)
-        avetIndex = new QueryableIndex[Datom, Bytes]()(ec, avetCtx, avetOrdering)
-
-        vaetCtx = new DefaultContext[Datom, Bytes](s"$name-vaet", roots.vaetRoot.map(_.root), NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(ec, storage, cache, vaetOrdering)
-        vaetIndex = new QueryableIndex[Datom, Bytes]()(ec, vaetCtx, vaetOrdering)
-
+        loadFromMeta(roots)
         Future.successful(true)
       }
     }
