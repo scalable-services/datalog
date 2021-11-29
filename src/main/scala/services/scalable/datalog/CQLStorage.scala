@@ -8,9 +8,8 @@ import services.scalable.index.{Block, Bytes, Context, Serializer, Storage, load
 import scala.jdk.FutureConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
-class CQLStorage(val NUM_LEAF_ENTRIES: Int, val NUM_META_ENTRIES: Int)
+class CQLStorage(val NUM_LEAF_ENTRIES: Int, val NUM_META_ENTRIES: Int, val session: CqlSession)
                 (implicit val ec: ExecutionContext,
-                 val session: CqlSession,
                  val serializer: Serializer[Block[Datom, Bytes]]
                 ) extends Storage[Datom, Bytes]{
 

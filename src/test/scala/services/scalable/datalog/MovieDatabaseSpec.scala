@@ -139,7 +139,7 @@ class MovieDatabaseSpec extends AnyFlatSpec {
     val EMPTY_ARRAY = Array.empty[Byte]
 
     implicit val cache = new DefaultCache[Datom, Bytes](MAX_PARENT_ENTRIES = 80000)
-    implicit val storage = new CQLStorage(NUM_LEAF_ENTRIES, NUM_META_ENTRIES)
+    implicit val storage = new CQLStorage(NUM_LEAF_ENTRIES, NUM_META_ENTRIES, session)
 
     val db = new DatomDatabase("movie-db", NUM_LEAF_ENTRIES, NUM_META_ENTRIES)(global, session, grpcBlockSerializer, cache, storage)
 
