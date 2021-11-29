@@ -336,7 +336,7 @@ class MovieDatabaseSpec extends AnyFlatSpec {
         movieYear <- getMovieYear(movieId)
         actors <- getActorIdsByMovie(movieId)
         actorAndBirth <- Future.sequence(actors.map{a => getActorBirth(a).map(a -> _)})
-        filtered = actorAndBirth.filter{case (a, birth) => movieYear - birth >= age}.map{case (a, birth) => a -> (movieYear - birth)}
+        filtered = actorAndBirth.filter{case (_, birth) => movieYear - birth >= age}.map{case (a, birth) => a -> (movieYear - birth)}
         result <- Future.sequence(filtered.map{case (a, age) => getActorNameById(a).map(name => name.get -> age)})
       } yield {
         result
@@ -350,7 +350,7 @@ class MovieDatabaseSpec extends AnyFlatSpec {
 
     logger.debug(s"\n${Console.MAGENTA_B}query results: ${id}${Console.RESET}\n")*/
 
-    val movies = Await.result(getActorsPlayedMovieAgeGtEq("Titanic", 18), Duration.Inf)
+    val movies = Await.result(getActorsPlayedMovieAgeGtEq("Titanic", 20), Duration.Inf)
 
     logger.debug(s"\n${Console.MAGENTA_B}query results: ${movies}${Console.RESET}\n")
 
