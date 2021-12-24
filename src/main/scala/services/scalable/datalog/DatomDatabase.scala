@@ -2,8 +2,9 @@ package services.scalable.datalog
 
 import com.datastax.oss.driver.api.core.CqlSession
 import com.datastax.oss.driver.api.core.cql.{BatchStatement, DefaultBatchType}
+import com.google.common.base.Charsets
 import services.scalable.datalog.grpc.{DBMeta, Datom, IndexMeta}
-import services.scalable.index.{Block, Bytes, Cache, Context, Leaf, QueryableIndex, Serializer, Storage, loader}
+import services.scalable.index.{Block, Bytes, Cache, Context, Leaf, QueryableIndex, RichAsyncIterator, Serializer, Storage, loader}
 import services.scalable.index.DefaultComparators.ord
 import services.scalable.index.impl.{DefaultCache, DefaultContext, MemoryStorage}
 
@@ -294,16 +295,121 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
     }
   }
 
-  /*def update(data: Seq[Tuple2[Datom, Bytes]]): Future[Boolean] = {
-    val updates = Seq(
-      eavtIndex.update(data)(eavtOrdering),
-      aevtIndex.update(data)(aevtOrdering),
-      avetIndex.update(data)(avetOrdering),
-      vaetIndex.update(data)(vaetOrdering)
-    )
+  val aevtTermFinder = new Ordering[Datom] {
+    override def compare(x: Datom, y: Datom): Int = {
+      val r = ord.compare(x.getA.getBytes(Charsets.UTF_8), y.getA.getBytes(Charsets.UTF_8))
 
-    Future.sequence(updates).map(_ => true)
-  }*/
+      if(r != 0) return r
+
+      ord.compare(x.getE.getBytes(), y.getE.getBytes())
+    }
+  }
+
+  val eavtTermFinder = new Ordering[Datom] {
+    override def compare(x: Datom, y: Datom): Int = {
+      val r = ord.compare(x.getE.getBytes(Charsets.UTF_8), y.getE.getBytes(Charsets.UTF_8))
+
+      if(r != 0) return r
+
+      ord.compare(x.getA.getBytes(), y.getA.getBytes())
+    }
+  }
+
+  val avetTermFinder = new Ordering[Datom] {
+    override def compare(x: Datom, y: Datom): Int = {
+      val r = ord.compare(x.getA.getBytes(Charsets.UTF_8), y.getA.getBytes(Charsets.UTF_8))
+
+      if(r != 0) return r
+
+      ord.compare(x.getV.toByteArray, y.getV.toByteArray)
+    }
+  }
+
+  val vaetTermFinder = new Ordering[Datom] {
+    override def compare(x: Datom, y: Datom): Int = {
+      val r = ord.compare(x.getV.toByteArray, y.getV.toByteArray)
+
+      if(r != 0) return r
+
+      ord.compare(x.getA.getBytes(Charsets.UTF_8), y.getA.getBytes(Charsets.UTF_8))
+    }
+  }
+
+  val prefixOrd = new Ordering[Datom] {
+    override def compare(k: Datom, prefix: Datom): Int = {
+      ord.compare(k.getA.getBytes(), prefix.getA.getBytes())
+    }
+  }
+
+  protected def select(d: Datom): (QueryableIndex[Datom, Bytes], Ordering[Datom]) = {
+    val n = Seq(d.e.isDefined, d.a.isDefined, d.v.isDefined).count(_ == true)
+
+    if(n == 0 || n == 3){
+      return eavtIndex -> eavtTermFinder
+    }
+
+    if(n == 1){
+
+      if(d.e.isDefined){
+        return aevtIndex -> aevtTermFinder
+      }
+
+      if(d.a.isDefined){
+        return aevtIndex -> aevtTermFinder
+      }
+
+      return vaetIndex -> vaetTermFinder
+    }
+
+    if(d.e.isDefined && d.a.isDefined){
+      return eavtIndex -> eavtTermFinder
+    }
+
+    if(d.a.isDefined && d.v.isDefined){
+      return avetIndex -> avetTermFinder
+    }
+
+    // VE ? NO SUCH CASE... AVE
+    aevtIndex -> aevtTermFinder
+  }
+
+  def findOne(d: Datom, reverse: Boolean = false): Future[Option[Datom]] = {
+    val (index, finder) = select(d)
+
+    val it = index.find(d, reverse, finder)
+
+    it.setLimit(1)
+
+    it.hasNext().flatMap {
+      case true => it.next().map(_.headOption.map(_._1))
+      case false => Future.successful(None)
+    }
+  }
+
+  def findMany(d: Datom, reverse: Boolean = false): RichAsyncIterator[Datom, Bytes] = {
+    val (index, finder) = select(d)
+    index.find(d, reverse, finder)
+  }
+
+  def gt(prefix: Datom, word: Datom, inclusive: Boolean, reverse: Boolean): RichAsyncIterator[Datom, Bytes] = {
+    val (index, finder) = select(word)
+    index.gt(prefix, word, inclusive, reverse)(prefixOrd, finder)
+  }
+
+  def gt(word: Datom, inclusive: Boolean, reverse: Boolean): RichAsyncIterator[Datom, Bytes] = {
+    val (index, finder) = select(word)
+    index.gt(word, inclusive, reverse)(finder)
+  }
+
+  def lt(word: Datom, inclusive: Boolean, reverse: Boolean): RichAsyncIterator[Datom, Bytes] = {
+    val (index, finder) = select(word)
+    index.lt(word, inclusive, reverse)(finder)
+  }
+
+  def lt(prefix: Datom, word: Datom, inclusive: Boolean, reverse: Boolean): RichAsyncIterator[Datom, Bytes] = {
+    val (index, finder) = select(word)
+    index.lt(prefix, word, inclusive, reverse)(prefixOrd, finder)
+  }
 
   def update(data: Seq[Tuple2[Datom, Bytes]]): Future[Boolean] = {
     val ids = data.map{case (d, _) => d.getE -> d.getA}
