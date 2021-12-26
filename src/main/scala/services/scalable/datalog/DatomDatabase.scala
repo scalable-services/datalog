@@ -32,15 +32,15 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
 
       r = ord.compare(x.getA.getBytes(), y.getA.getBytes())
 
-      if(r != 0) return r
+      if(r != 0 || y.v.isEmpty) return r
 
       r = ord.compare(x.getV.toByteArray, y.getV.toByteArray)
 
-      if(r != 0) return r
+      if(r != 0 || y.tx.isEmpty) return r
 
       r = x.getTx.compareTo(y.getTx)
 
-      if(r != 0) return r
+      if(r != 0 || y.tmp.isEmpty) return r
 
       x.getTmp.compareTo(y.getTmp)
     }
@@ -50,19 +50,19 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
     override def compare(x: Datom, y: Datom): Int = {
       var r = ord.compare(x.getA.getBytes(), y.getA.getBytes())
 
-      if(r != 0) return r
+      if(r != 0 || y.v.isEmpty) return r
 
       r = ord.compare(x.getV.toByteArray, y.getV.toByteArray)
 
-      if(r != 0) return r
+      if(r != 0 || y.e.isEmpty) return r
 
       r = x.getE.compareTo(y.getE)
 
-      if(r != 0) return r
+      if(r != 0 || y.tx.isEmpty) return r
 
       r = x.getTx.compareTo(y.getTx)
 
-      if(r != 0) return r
+      if(r != 0 || y.tmp.isEmpty) return r
 
       x.getTmp.compareTo(y.getTmp)
     }
@@ -72,19 +72,19 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
     override def compare(x: Datom, y: Datom): Int = {
       var r = ord.compare(x.getA.getBytes(), y.getA.getBytes())
 
-      if(r != 0) return r
+      if(r != 0 || y.e.isEmpty) return r
 
       r = ord.compare(x.getE.getBytes(), y.getE.getBytes())
 
-      if(r != 0) return r
+      if(r != 0 || y.v.isEmpty) return r
 
       r = ord.compare(x.getV.toByteArray, y.getV.toByteArray)
 
-      if(r != 0) return r
+      if(r != 0 || y.tx.isEmpty) return r
 
       r = x.getTx.compareTo(y.getTx)
 
-      if(r != 0) return r
+      if(r != 0 || y.tmp.isEmpty) return r
 
       x.getTmp.compareTo(y.getTmp)
     }
@@ -98,15 +98,15 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
 
       r = ord.compare(x.getA.getBytes(), y.getA.getBytes())
 
-      if(r != 0) return r
+      if(r != 0 || y.e.isEmpty) return r
 
       r = ord.compare(x.getE.getBytes(), y.getE.getBytes())
 
-      if(r != 0) return r
+      if(r != 0 || y.tx.isEmpty) return r
 
       r = x.getTx.compareTo(y.getTx)
 
-      if(r != 0) return r
+      if(r != 0 || y.tmp.isEmpty) return r
 
       x.getTmp.compareTo(y.getTmp)
     }
@@ -341,7 +341,7 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
     }
   }
 
-  protected def select(d: Datom): (QueryableIndex[Datom, Bytes], Ordering[Datom]) = {
+  /*protected def select(d: Datom): (QueryableIndex[Datom, Bytes], Ordering[Datom]) = {
     val n = Seq(d.e.isDefined, d.a.isDefined, d.v.isDefined).count(_ == true)
 
     if(n == 0 || n == 3){
@@ -371,6 +371,16 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
 
     // VE ? NO SUCH CASE... AVE
     aevtIndex -> aevtTermFinder
+  }*/
+
+  protected def select(d: Datom): (QueryableIndex[Datom, Bytes], Ordering[Datom]) = {
+    if(d.e.isDefined && d.v.isDefined){
+      return aevtIndex -> aevtOrdering
+    }
+
+    if(d.v.isDefined) return avetIndex -> avetOrdering
+
+    aevtIndex -> aevtOrdering
   }
 
   def findOne(d: Datom, reverse: Boolean = false): Future[Option[Datom]] = {
@@ -392,23 +402,23 @@ class DatomDatabase(val name: String, val NUM_LEAF_ENTRIES: Int, val NUM_META_EN
   }
 
   def gt(prefix: Datom, word: Datom, inclusive: Boolean, reverse: Boolean): RichAsyncIterator[Datom, Bytes] = {
-    val (index, finder) = select(word)
-    index.gt(prefix, word, inclusive, reverse)(prefixOrd, finder)
+    //val (index, finder) = select(word)
+    avetIndex.gt(prefix, word, inclusive, reverse)(prefixOrd, avetOrdering)
   }
 
   def gt(word: Datom, inclusive: Boolean, reverse: Boolean): RichAsyncIterator[Datom, Bytes] = {
-    val (index, finder) = select(word)
-    index.gt(word, inclusive, reverse)(finder)
+    //val (index, finder) = select(word)
+    avetIndex.gt(word, inclusive, reverse)(avetOrdering)
   }
 
   def lt(word: Datom, inclusive: Boolean, reverse: Boolean): RichAsyncIterator[Datom, Bytes] = {
-    val (index, finder) = select(word)
-    index.lt(word, inclusive, reverse)(finder)
+   // val (index, finder) = select(word)
+    avetIndex.lt(word, inclusive, reverse)(avetOrdering)
   }
 
   def lt(prefix: Datom, word: Datom, inclusive: Boolean, reverse: Boolean): RichAsyncIterator[Datom, Bytes] = {
-    val (index, finder) = select(word)
-    index.lt(prefix, word, inclusive, reverse)(prefixOrd, finder)
+    //val (index, finder) = select(word)
+    avetIndex.lt(prefix, word, inclusive, reverse)(prefixOrd, avetOrdering)
   }
 
   def update(data: Seq[Tuple2[Datom, Bytes]]): Future[Boolean] = {

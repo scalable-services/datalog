@@ -242,30 +242,41 @@ class MovieDatabaseSpec extends AnyFlatSpec {
       }
     }
 
-    def avetFind(a: String, value: Array[Byte]): Future[Option[Datom]] = {
+    /*def avetFind(a: String, value: Array[Byte]): Future[Option[Datom]] = {
       val it = db.avetIndex.find(Datom(a = Some(a), v = Some(ByteString.copyFrom(value))), false, avetTermFinder)
       TestHelper.one(it).map(_.map(_._1))
-    }
+    }*/
 
-    def eavtFind(a: String, e: String): Future[Option[Datom]] = {
-      val it = db.eavtIndex.find(Datom(a = Some(a), e = Some(e)), false, eavtTermFinder)
-      TestHelper.one(it).map(_.map(_._1))
-    }
+    /*def eavtFind(a: String, e: String): Future[Option[Datom]] = {
+      db.findOne(Datom(a = Some(a), e = Some(e)))
+    }*/
 
     def getMovieTitleById(id: String): Future[Option[String]] = {
-      eavtFind("movies/:title", id).map(_.map(_.getV.toStringUtf8))
+      db.findOne(Datom(a = Some("movies/:title"), e = Some(id))).map {
+        case None => None
+        case Some(r) => Some(Helper.readString(r.getV.toByteArray))
+      }
     }
 
     def getMovieIdByTitle(title: String): Future[Option[String]] = {
-      avetFind("movies/:title", Helper.write(title)).map(_.map(_.getE))
+      db.findOne(Datom(a = Some("movies/:title"), v = Some(Helper.write(title)))).map {
+        case None => None
+        case Some(r) => Some(r.getE)
+      }
     }
 
     def getActorIdByName(name: String): Future[Option[String]] = {
-      avetFind("actors/:name", Helper.write(name)).map(_.map(_.getE))
+      db.findOne(Datom(a = Some("actors/:name"), v = Some(Helper.write(name)))).map {
+        case None => None
+        case Some(r) => Some(r.getE)
+      }
     }
 
     def getActorNameById(id: String): Future[Option[String]] = {
-      eavtFind("actors/:name", id).map(_.map(_.getV.toStringUtf8))
+      db.findOne(Datom(a = Some("actors/:name"), e = Some(id))).map {
+        case None => None
+        case Some(r) => Some(Helper.readString(r.getV.toByteArray))
+      }
     }
 
     def getMoviesPlayedBy(actor: String): Future[Seq[String]] = {
@@ -275,25 +286,27 @@ class MovieDatabaseSpec extends AnyFlatSpec {
 
           // We can use a stream here with no problems... But for demonstration purposes let's get all movies
           TestHelper.all(
-            db.eavtIndex.find(Datom(
+            db.findMany(Datom(
               e = Some(id),
               a = Some("actors/:played")
-            ), false, eavtTermFinder)
+            ))
           ).map(_.map(_._1.getV.toStringUtf8)).flatMap { movies =>
             Future.sequence(movies.map{getMovieTitleById(_)}).map(_.filter(_.isDefined).map(_.get))
           }
       }
     }
 
-    def getActorBirth(id: String): Future[Int] = {
-      eavtFind("actors/:birth", id).map { r =>
-         Helper.readInt(r.get.getV.toByteArray)
+    def getActorBirth(id: String): Future[Option[Int]] = {
+      db.findOne(Datom(a = Some("actors/:birth"), e = Some(id))).map {
+        case None => None
+        case Some(r) => Some(Helper.readInt(r.getV.toByteArray))
       }
     }
 
-    def getMovieYear(id: String): Future[Int] = {
-      eavtFind("movies/:year", id).map { r =>
-        Helper.readInt(r.get.getV.toByteArray)
+    def getMovieYear(id: String): Future[Option[Int]] = {
+      db.findOne(Datom(a = Some("movies/:year"), e = Some(id))).map {
+        case None => None
+        case Some(r) => Some(Helper.readInt(r.getV.toByteArray))
       }
     }
 
@@ -303,19 +316,23 @@ class MovieDatabaseSpec extends AnyFlatSpec {
         case None => Future.successful(Seq.empty[String])
         case Some(id) =>
 
-          getActorBirth(id).flatMap { birth =>
+          getActorBirth(id).flatMap {
+
+            case None => Future.successful(Seq.empty[String])
+            case Some(birth) =>
 
             TestHelper.all(
-              db.eavtIndex.find(Datom(
+              db.findMany(Datom(
                 e = Some(id),
                 a = Some("actors/:played")
-              ), false, eavtTermFinder)
+              ))
             ).map(_.map(_._1.getV.toStringUtf8)).flatMap { movies =>
 
               Future.sequence(movies.map{m => getMovieYear(m).map(m -> _)}).flatMap { list =>
-                val filtered = list.filter{case (id, y) => y - birth <= age}.map(_._1)
+                val filtered = list.filter(_._2.isDefined).filter{case (id, y) => y.get - birth <= age}.map(_._1)
                 Future.sequence(filtered.map{m => getMovieTitleById(m)}).map(_.filter(_.isDefined).map(_.get))
               }
+
             }
 
           }
@@ -324,10 +341,10 @@ class MovieDatabaseSpec extends AnyFlatSpec {
     }
 
     def getActorIdsByMovie(movieId: String): Future[Seq[String]] = {
-      TestHelper.all(db.avetIndex.find(Datom(
+      TestHelper.all(db.findMany(Datom(
         a = Some("actors/:played"),
         v = Some(Helper.write(movieId))
-      ), false, avetTermFinder)).map(_.map(_._1.getE))
+      ))).map(_.map(_._1.getE))
     }
 
     def getActorsPlayedMovieAgeGtEq(title: String, age: Int): Future[Seq[(String, Int)]] = {
@@ -336,8 +353,8 @@ class MovieDatabaseSpec extends AnyFlatSpec {
         movieYear <- getMovieYear(movieId)
         actors <- getActorIdsByMovie(movieId)
         actorAndBirth <- Future.sequence(actors.map{a => getActorBirth(a).map(a -> _)})
-        filtered = actorAndBirth.filter{case (_, birth) => movieYear - birth >= age}.map{case (a, birth) => a -> (movieYear - birth)}
-        result <- Future.sequence(filtered.map{case (a, age) => getActorNameById(a).map(name => name.get -> age)})
+        filtered = actorAndBirth.filter{case (_, birth) => birth.isDefined && movieYear.isDefined && movieYear.get - birth.get >= age}.map{case (a, birth) => a -> (movieYear.get - birth.get)}
+        result <- Future.sequence(filtered.map{case (a, age) => getActorNameById(a).filter(_.isDefined).map(name => name.get -> age)})
       } yield {
         result
       }
@@ -350,7 +367,7 @@ class MovieDatabaseSpec extends AnyFlatSpec {
 
     logger.debug(s"\n${Console.MAGENTA_B}query results: ${id}${Console.RESET}\n")*/
 
-    val movies = Await.result(getActorsPlayedMovieAgeGtEq("Titanic", 20), Duration.Inf)
+    val movies = Await.result(getActorsPlayedMovieAgeGtEq("Titanic", 22), Duration.Inf)
 
     logger.debug(s"\n${Console.MAGENTA_B}query results: ${movies}${Console.RESET}\n")
 
