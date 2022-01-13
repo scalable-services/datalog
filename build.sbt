@@ -23,7 +23,7 @@ libraryDependencies ++= Seq(
 
   "org.scala-lang.modules" %% "scala-collection-compat" % "2.1.6",
 
-  "services.scalable" %% "index" % "0.8",
+  "services.scalable" %% "index" % "0.1",
 
   "com.datastax.oss" % "java-driver-core" % "4.13.0"
 )
